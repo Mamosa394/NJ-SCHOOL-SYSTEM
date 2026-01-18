@@ -7,7 +7,7 @@ import AttendanceRoutes from './routes/StudentRoutes/AttendanceRoutes.js';
 import CourseworkRoutes from './routes/StudentRoutes/CourseworkRoutes.js';
 import GradeRoutes from './routes/StudentRoutes/GradeRoutes.js';
 import PaymentRoutes from './routes/StudentRoutes/PaymentRoutes.js';
-import Studentroutes from './routes/StudentRoutes/Studentroutes.js';
+import StudentRoutes from './routes/StudentRoutes/StudentRoutes.js';
 import TimetableRoutes from './routes/StudentRoutes/TimetableRoutes.js';     
 
 const app = express();
@@ -27,7 +27,7 @@ mongoose.connect('mongodb+srv://motsiemamosa:sI0qJMGueCfMsfVf@school-management-
 // Routes
 app.use('/api', SignupRoutes);   // ✅ new signup-related routes
 app.use('/api', LoginRoutes);
-app.use('/api/students', Studentroutes);
+app.use('/api/students', StudentRoutes);
 app.use('/api/grades', GradeRoutes);
 app.use('/api/attendance', AttendanceRoutes);
 app.use('/api/finance', PaymentRoutes);
@@ -36,5 +36,5 @@ app.use('/api/timetable', TimetableRoutes);
 
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
