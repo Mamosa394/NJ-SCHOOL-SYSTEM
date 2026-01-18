@@ -72,7 +72,7 @@ const Login = () => {
     setTimeout(() => {
       setLoading(false);
       // For demo, navigate to dashboard
-      navigate('/dashboard');
+      navigate('/admin');
     }, 2000);
   };
 
