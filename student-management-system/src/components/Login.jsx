@@ -9,7 +9,8 @@ import {
   Shield,
   UserPlus,
   Key,
-  CheckCircle
+  CheckCircle,
+  Users // Added for role icon
 } from 'lucide-react';
 import '../styles/login.css';
 import Logo from "../assets/Logo.jpg"
@@ -18,7 +19,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    role: '' // ADDED: Role state
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -54,6 +56,11 @@ const Login = () => {
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
+
+    // ADDED: Role validation
+    if (!formData.role) {
+      newErrors.role = 'Please select a role';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -68,12 +75,38 @@ const Login = () => {
     
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // ✅ ACTUAL API CALL (Update URL to your backend)
+      const response = await fetch('http://localhost:5000/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setLoading(false);
+        // ✅ Store user in localStorage for ProtectedRoute
+        localStorage.setItem('user', JSON.stringify(data));
+
+        // ✅ Route based on chosen role
+        const routes = {
+          admin: '/admin',
+          teacher: '/teacher',
+          student: '/student',
+          parent: '/parent'
+        };
+        navigate(routes[data.role]);
+      } else {
+        setLoading(false);
+        setErrors({ server: data.message });
+      }
+    } catch (err) {
+      console.error("Login Error:", err);
       setLoading(false);
-      // For demo, navigate to dashboard
-      navigate('/admin');
-    }, 2000);
+      setErrors({ server: "Server connection failed." });
+    }
   };
 
   const handleForgotPassword = () => {
@@ -110,7 +143,7 @@ const Login = () => {
           <div className="njec-login-header">
             <div className="njec-login-logo">
               <div className="njec-login-logo-icon">
-                <img src= {Logo} className="njec-login-logo-icon"/>
+                <img src= {Logo} className="njec-login-logo-icon" alt="Logo"/>
               </div>
               <div className="njec-login-brand">
                 <h1>NJEC</h1>
@@ -126,7 +159,38 @@ const Login = () => {
               <p>Please enter your Account details</p>
             </div>
 
+            {/* ADDED: Server Error Display */}
+            {errors.server && <p style={{color: 'red', textAlign: 'center', marginBottom: '10px'}}>{errors.server}</p>}
+
             <form onSubmit={handleSubmit} className="njec-login-form">
+              
+              {/* ADDED: Role Field */}
+              <div className="njec-form-group">
+                <label htmlFor="role" className="njec-form-label">
+                  <Users size={18} />
+                  <span>Select Role</span>
+                </label>
+                <div className="njec-input-wrapper">
+                  <select
+                    id="role"
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className={`njec-input ${errors.role ? 'error' : ''}`}
+                    disabled={loading}
+                  >
+                    <option value="">Select your role...</option>
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="student">Student</option>
+                    <option value="parent">Parent</option>
+                  </select>
+                </div>
+                {errors.role && (
+                  <span className="njec-error-message">{errors.role}</span>
+                )}
+              </div>
+
               {/* Email Field */}
               <div className="njec-form-group">
                 <label htmlFor="email" className="njec-form-label">
@@ -272,14 +336,12 @@ const Login = () => {
         {/* Right Side - Testimonial/Info */}
         <div className="njec-login-info-section">
           <div className="njec-info-card">
-            {/* Quote Icon */}
             <div className="njec-quote-icon">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
               </svg>
             </div>
 
-            {/* Testimonial */}
             <div className="njec-testimonial">
               <h3>What our Students Say</h3>
               <p className="njec-testimonial-text">
@@ -296,7 +358,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* CTA Section */}
             <div className="njec-login-cta">
               <h3>Get your learning journey started</h3>
               <p>
@@ -312,7 +373,6 @@ const Login = () => {
               </button>
             </div>
 
-            {/* Additional Info */}
             <div className="njec-additional-info">
               <p>
                 Be on the lookout for new courses and learning opportunities 
@@ -335,7 +395,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Decorative Elements */}
           <div className="njec-info-decoration">
             <div className="njec-decoration-dot dot-1"></div>
             <div className="njec-decoration-dot dot-2"></div>
@@ -344,7 +403,6 @@ const Login = () => {
         </div>
       </div>
 
-      {/* Loading Overlay */}
       {loading && (
         <div className="njec-login-loading">
           <div className="njec-loading-content">
