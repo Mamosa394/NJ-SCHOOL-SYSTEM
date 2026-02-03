@@ -1,7 +1,8 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
 import SignupRoutes from './routes/SignupRoutes.js';
 import LoginRoutes from './routes/LoginRoutes.js';
 import AttendanceRoutes from './routes/StudentRoutes/AttendanceRoutes.js';
@@ -29,7 +30,7 @@ app.use('/api/timetable', TimetableRoutes);
 
 // MongoDB connection & Server Start
 const PORT = 5000;
-const MONGO_URI = 'mongodb+srv://motsiemamosa:tdJELuVw5T3PsZXT@school-management-syste.xxx2c6d.mongodb.net/?retryWrites=true&w=majority&appName=school-management-system';
+const MONGO_URI = 'mongodb+srv://motsiemamosa:JONttCU9ZHgiZl5w@njschoolsystem.kylcszl.mongodb.net/?appName=NJSCHOOLSYSTEM';
 
 mongoose.connect(MONGO_URI)
   .then(() => {
