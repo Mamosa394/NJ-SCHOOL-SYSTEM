@@ -1,23 +1,26 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-import SignupRoutes from './routes/SignupRoutes.js';
-import LoginRoutes from './routes/LoginRoutes.js';
-import AttendanceRoutes from './routes/StudentRoutes/AttendanceRoutes.js';
-import CourseworkRoutes from './routes/StudentRoutes/CourseworkRoutes.js';
-import GradeRoutes from './routes/StudentRoutes/GradeRoutes.js';
-import PaymentRoutes from './routes/StudentRoutes/PaymentRoutes.js';
-import StudentRoutes from './routes/StudentRoutes/StudentRoutes.js';
-import TimetableRoutes from './routes/StudentRoutes/TimetableRoutes.js';
+// ES Modules fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Initialize TWO Supabase clients
+// ==================== ENVIRONMENT CHECK ====================
+console.log('\n🔍 Checking environment...');
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Add this to your .env file!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -28,29 +31,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
   process.exit(1);
 }
 
-console.log('🔧 Initializing Supabase with:');
-console.log(`   URL: ${supabaseUrl}`);
-console.log(`   Anon Key: ${supabaseAnonKey.substring(0, 20)}...`);
+console.log('✅ Environment variables loaded');
+console.log(`🔧 Supabase URL: ${supabaseUrl}`);
+console.log(`🔑 Key starts with: ${supabaseAnonKey.substring(0, 10)}...`);
 
-// Regular client (for auth operations)
+// Initialize Supabase clients
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Service role client (bypasses RLS) - if service key is provided
 let supabaseAdmin = supabase;
-if (supabaseServiceKey) {
+if (supabaseServiceKey && supabaseServiceKey.trim() !== '') {
   supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
     }
   });
-  console.log(`   Service Key: ${supabaseServiceKey.substring(0, 20)}... (RLS bypass enabled)`);
+  console.log('✅ Service role client initialized (RLS bypass enabled)');
 } else {
   console.log('⚠️  No service role key provided. RLS may block operations.');
   console.log('ℹ️  Add SUPABASE_SERVICE_ROLE_KEY to your .env file from Supabase dashboard');
 }
 
-// Middleware
+// ==================== MIDDLEWARE ====================
 app.use(cors({
   origin: true, // React frontend
   credentials: true,
@@ -60,7 +63,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// Optional: Parse Supabase JWT from Authorization header
+// ==================== AUTH MIDDLEWARE ====================
 const extractSupabaseUser = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -87,7 +90,7 @@ const extractSupabaseUser = async (req, res, next) => {
 // Apply auth middleware to all routes (optional)
 app.use(extractSupabaseUser);
 
-// Health check endpoint
+// ==================== HEALTH CHECK ====================
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -97,7 +100,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Test endpoint to verify your student table structure
+// ==================== TEST SCHEMA ENDPOINT ====================
 app.get('/api/students/test/schema', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -136,9 +139,7 @@ app.get('/api/students/test/schema', async (req, res) => {
   }
 });
 
-// ==============================================
-// FIXED STUDENT REGISTRATION ENDPOINT
-// ==============================================
+// ==================== STUDENT REGISTRATION (FIXED VERSION) ====================
 app.post('/api/students', async (req, res) => {
   let userId; // Declare here for cleanup
   try {
@@ -154,7 +155,7 @@ app.post('/api/students', async (req, res) => {
       birth_date,
       gender,
       enrollment_status = 'active',
-      grade_level = 'Grade 10', // Default that should work
+      grade_level = 'Grade 10',
       subjects = [],
       home_address,
       parent_name,
@@ -189,7 +190,25 @@ app.post('/api/students', async (req, res) => {
       });
     }
 
-    // FIX 1: Normalize grade level to pass check constraint
+    // ========== CRITICAL FIX: STUDENT NUMBER FORMAT ==========
+    let finalStudentNumber = String(student_number).replace(/\D/g, ''); // Remove non-digits
+    
+    if (finalStudentNumber.length !== 9) {
+      console.log(`⚠️ Student number "${student_number}" is ${finalStudentNumber.length} digits, needs to be 9`);
+      
+      // Pad with zeros to make 9 digits
+      if (finalStudentNumber.length < 9) {
+        finalStudentNumber = finalStudentNumber.padStart(9, '0');
+      }
+      // If longer than 9, truncate
+      else if (finalStudentNumber.length > 9) {
+        finalStudentNumber = finalStudentNumber.substring(0, 9);
+      }
+      
+      console.log(`✅ Formatted student number: ${finalStudentNumber}`);
+    }
+
+    // ========== CRITICAL FIX: GRADE LEVEL VALIDATION ==========
     let finalGradeLevel = grade_level;
     const validGradeLevels = ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
     
@@ -206,7 +225,7 @@ app.post('/api/students', async (req, res) => {
     const { data: existingStudent, error: checkError } = await supabaseAdmin
       .from('students')
       .select('student_number')
-      .eq('student_number', student_number)
+      .eq('student_number', finalStudentNumber)
       .maybeSingle();
 
     if (checkError) {
@@ -214,11 +233,13 @@ app.post('/api/students', async (req, res) => {
     }
 
     if (existingStudent) {
-      console.log(`❌ Student number ${student_number} already exists`);
-      return res.status(400).json({
-        success: false,
-        error: `Student number ${student_number} already exists`
-      });
+      console.log(`❌ Student number ${finalStudentNumber} already exists`);
+      
+      // Generate a new unique student number
+      const year = new Date().getFullYear();
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      finalStudentNumber = `${year}${random}${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`.slice(0, 9);
+      console.log(`🔄 Generated new student number: ${finalStudentNumber}`);
     }
 
     // Check if email already exists
@@ -246,7 +267,7 @@ app.post('/api/students', async (req, res) => {
         data: {
           full_name,
           user_type: 'student',
-          student_number: student_number,
+          student_number: finalStudentNumber,
           grade_level: finalGradeLevel
         }
       }
@@ -266,18 +287,18 @@ app.post('/api/students', async (req, res) => {
     // 2. Insert into students table using ADMIN CLIENT (bypasses RLS)
     console.log('💾 Inserting into students table...');
     
-    // Prepare student data - FIX 2: Remove grade_numeric (it's generated)
+    // Prepare student data - FIX: Remove grade_numeric (it's generated)
     const studentData = {
       id: userId,
       full_name,
-      student_number,
+      student_number: finalStudentNumber,
       email,
       phone: phone || null,
       birth_date: birth_date || null,
       gender,
       enrollment_status,
       grade_level: finalGradeLevel, // Use validated grade level
-      // DO NOT include grade_numeric - it's generated by database
+      // ⚠️ DO NOT include grade_numeric - it's generated by database
       subjects: Array.isArray(subjects) ? subjects : 
                 (typeof subjects === 'string' ? subjects.split(',').map(s => s.trim()).filter(s => s) : []),
       home_address: home_address || null,
@@ -289,14 +310,31 @@ app.post('/api/students', async (req, res) => {
       updated_by: userId
     };
 
-    console.log('📊 Student data to insert (without grade_numeric):', JSON.stringify(studentData, null, 2));
+    console.log('📊 Student data to insert:', JSON.stringify({
+      id: studentData.id,
+      full_name: studentData.full_name,
+      student_number: studentData.student_number,
+      email: studentData.email,
+      grade_level: studentData.grade_level,
+      gender: studentData.gender
+    }, null, 2));
 
     // Try insertion with admin client (bypasses RLS)
-    const { data: studentRecord, error: dbError } = await supabaseAdmin
-      .from('students')
-      .insert([studentData])
-      .select()
-      .single();
+    let studentRecord;
+    let dbError;
+    
+    try {
+      const result = await supabaseAdmin
+        .from('students')
+        .insert([studentData])
+        .select()
+        .single();
+      
+      studentRecord = result.data;
+      dbError = result.error;
+    } catch (error) {
+      dbError = error;
+    }
 
     if (dbError) {
       console.log('❌ Database insertion error:', dbError);
@@ -306,21 +344,20 @@ app.post('/api/students', async (req, res) => {
       if (dbError.message.includes('generated column') || dbError.message.includes('grade_numeric')) {
         console.log('⚠️ grade_numeric is a generated column, trying without it...');
         
-        // Make sure grade_numeric is not in the data
-        delete studentData.grade_numeric;
+        // Ensure grade_numeric is not in the data
+        const { grade_numeric, ...dataWithoutGradeNumeric } = studentData;
         
-        // Try again
-        const { data: retryData, error: retryError } = await supabaseAdmin
+        const retryResult = await supabaseAdmin
           .from('students')
-          .insert([studentData])
+          .insert([dataWithoutGradeNumeric])
           .select()
           .single();
           
-        if (retryError) {
-          throw retryError;
+        if (retryResult.error) {
+          throw retryResult.error;
         }
         
-        studentRecord = retryData;
+        studentRecord = retryResult.data;
         console.log('✅ Inserted without grade_numeric');
       } else {
         throw dbError;
@@ -330,7 +367,7 @@ app.post('/api/students', async (req, res) => {
     console.log(`✅ Successfully registered student: ${full_name}`);
     console.log(`🎓 Student ID: ${userId}`);
     console.log(`📚 Grade: ${finalGradeLevel}`);
-    console.log('📦 Full student record:', JSON.stringify(studentRecord, null, 2));
+    console.log(`🔢 Student Number: ${finalStudentNumber}`);
 
     // Auto-confirm email for testing (optional)
     if (process.env.NODE_ENV === 'development') {
@@ -354,7 +391,7 @@ app.post('/api/students', async (req, res) => {
         full_name: authData.user.user_metadata?.full_name,
         confirmed: authData.user.email_confirmed_at !== null
       },
-      note: 'grade_numeric is auto-generated by the database based on grade_level'
+      note: 'Registration completed successfully'
     });
 
   } catch (error) {
@@ -382,7 +419,7 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
-// GET all students
+// ==================== GET ALL STUDENTS ====================
 app.get('/api/students', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -406,7 +443,7 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
-// GET single student by ID
+// ==================== GET SINGLE STUDENT ====================
 app.get('/api/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -434,7 +471,7 @@ app.get('/api/students/:id', async (req, res) => {
   }
 });
 
-// UPDATE student
+// ==================== UPDATE STUDENT ====================
 app.put('/api/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -472,7 +509,7 @@ app.put('/api/students/:id', async (req, res) => {
   }
 });
 
-// DELETE student (soft delete)
+// ==================== DELETE STUDENT ====================
 app.delete('/api/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -503,9 +540,7 @@ app.delete('/api/students/:id', async (req, res) => {
   }
 });
 
-// ==============================================
-// NEW ENDPOINTS FOR DEBUGGING
-// ==============================================
+// ==================== DEBUG ENDPOINTS ====================
 
 // Test RLS and constraints
 app.get('/api/debug/grade-levels', async (req, res) => {
@@ -539,7 +574,7 @@ app.get('/api/debug/constraints', async (req, res) => {
     const testData = {
       id: '00000000-0000-0000-0000-000000000000',
       full_name: 'Test Constraint',
-      student_number: '999999999',
+      student_number: '202400001',
       email: 'test@constraint.com',
       grade_level: 'Grade 10'
     };
@@ -558,40 +593,7 @@ app.get('/api/debug/constraints', async (req, res) => {
   }
 });
 
-// Quick fix endpoint - drops and recreates table (DANGEROUS - for development only)
-app.post('/api/debug/reset-table', async (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(403).json({ error: 'Only available in development' });
-  }
-  
-  try {
-    // This would require SQL execution permission
-    res.json({
-      success: true,
-      message: 'Run this SQL in Supabase SQL Editor:',
-      sql: `
-        -- Drop grade_numeric column constraint
-        ALTER TABLE students DROP COLUMN IF EXISTS grade_numeric CASCADE;
-        
-        -- Recreate as regular column
-        ALTER TABLE students ADD COLUMN grade_numeric INTEGER DEFAULT 10;
-        
-        -- Update check constraint if needed
-        ALTER TABLE students DROP CONSTRAINT IF EXISTS students_grade_level_check;
-        ALTER TABLE students ADD CONSTRAINT students_grade_level_check 
-        CHECK (grade_level IN ('Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'));
-        
-        -- Disable RLS for testing
-        ALTER TABLE students DISABLE ROW LEVEL SECURITY;
-      `
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// The rest of your existing endpoints remain the same...
-// Auth endpoints that work with Supabase
+// ==================== AUTH ENDPOINTS ====================
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
@@ -708,7 +710,7 @@ app.get('/api/auth/profile', async (req, res) => {
   }
 });
 
-// Test Supabase connection
+// ==================== TEST SUPABASE CONNECTION ====================
 app.get('/api/test', async (req, res) => {
   try {
     // Test auth connection
@@ -732,33 +734,27 @@ app.get('/api/test', async (req, res) => {
   }
 });
 
-// Serve static files in production (if you're serving React build)
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  app.use(express.static(path.join(__dirname, 'client/build')));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-  });
-}
-
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false,
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
-});
-
-// Start server
+// ==================== START SERVER ====================
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`📚 API available at http://localhost:${PORT}/api`);
-  console.log(`🎓 Student Registration: POST http://localhost:${PORT}/api/students`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🐛 Debug endpoints:`);
-  console.log(`   - http://localhost:${PORT}/api/debug/grade-levels`);
-  console.log(`   - http://localhost:${PORT}/api/debug/constraints`);
-  console.log(`⚠️  IMPORTANT: Add SUPABASE_SERVICE_ROLE_KEY to .env file from Supabase dashboard!`);
+  console.log(`
+✅ Server running on http://localhost:${PORT}
+📚 API Endpoints:
+   POST /api/students      - Register student
+   GET  /api/students      - Get all students  
+   GET  /api/students/:id  - Get single student
+   PUT  /api/students/:id  - Update student
+   DELETE /api/students/:id - Delete student
+   POST /api/auth/register - User registration
+   POST /api/auth/login    - User login
+   GET  /api/health        - Health check
+   GET  /api/test          - Test Supabase
+
+🔧 Important Notes:
+   • student_number must be 9 digits
+   • grade_level must be Grade 8-12
+   • grade_numeric is auto-generated (don't send it)
+   • Add SUPABASE_SERVICE_ROLE_KEY to .env for RLS bypass
+
+🚀 Ready for student registration!
+`);
 });
