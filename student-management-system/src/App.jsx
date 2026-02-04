@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import HomePage from "./components/HomePage";
-import Signup from "./components/Signup";
+// import Signup from "./components/Signup";
 import Login from "./components/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
+import StudentRegistration from './components/TestSignUP';
 import './App.css';
 
 // ✅ Security Gatekeeper Component
@@ -28,9 +29,11 @@ function App() {
     <Router>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<HomePage />} />
+        <Route path="/ss" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        {/* <Route path="/signup" element={<Signup />} /> */}
+        <Route path="/" element={<StudentRegistration />} />
+
         
         {/* ✅ Protected Dashboard Routes */}
         
