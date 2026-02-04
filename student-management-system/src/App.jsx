@@ -7,6 +7,7 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
+import MultiStageRegistration from './components/MultiStageRegistration';
 import './App.css';
 
 // ✅ Security Gatekeeper Component
@@ -32,7 +33,9 @@ function App() {
         <Route path="/ss" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         {/* <Route path="/signup" element={<Signup />} /> */}
-        <Route path="/" element={<StudentRegistration />} />
+        <Route path="/ss" element={<StudentRegistration />} />
+        <Route path="/" element={<MultiStageRegistration />} />
+
 
         
         {/* ✅ Protected Dashboard Routes */}
