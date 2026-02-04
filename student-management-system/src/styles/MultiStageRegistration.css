@@ -354,6 +354,8 @@
   font-size: 14px;
   transition: var(--njec-transition);
   background: var(--njec-white);
+  color: #0d1447;
+
 }
 
 .njec-form-input:focus,
