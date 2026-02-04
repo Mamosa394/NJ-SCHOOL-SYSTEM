@@ -1,7 +1,15 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+
+import SignupRoutes from './routes/SignupRoutes.js';
+import LoginRoutes from './routes/LoginRoutes.js';
+import AttendanceRoutes from './routes/StudentRoutes/AttendanceRoutes.js';
+import CourseworkRoutes from './routes/StudentRoutes/CourseworkRoutes.js';
+import GradeRoutes from './routes/StudentRoutes/GradeRoutes.js';
+import PaymentRoutes from './routes/StudentRoutes/PaymentRoutes.js';
+import StudentRoutes from './routes/StudentRoutes/StudentRoutes.js';
+import TimetableRoutes from './routes/StudentRoutes/TimetableRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
