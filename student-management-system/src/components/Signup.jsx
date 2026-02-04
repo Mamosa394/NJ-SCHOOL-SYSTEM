@@ -20,6 +20,7 @@ import {
   GraduationCap,
   ChevronRight
 } from 'lucide-react';
+import { supabase } from '../index'; // Added Supabase Client
 import '../styles/signup.css';
 import Logo from "../assets/Logo.jpg";
 
@@ -65,10 +66,8 @@ const Signup = () => {
   useEffect(() => {
     const getAdminCount = async () => {
       try {
-        // Simulate API call
-        setTimeout(() => {
-          setAdminCount(1); // Example: 1 admin already exists
-        }, 500);
+        // Fetch actual admin count from Supabase if needed, or keep simulation
+        setAdminCount(1); 
       } catch (err) {
         console.error(err);
       }
@@ -104,7 +103,6 @@ const Signup = () => {
       setPasswordStrength(evaluatePasswordStrength(value));
     }
     
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -153,7 +151,6 @@ const Signup = () => {
       newErrors.acceptTerms = 'You must accept the terms and conditions';
     }
     
-    // Student-specific validations
     if (formData.role === 'student') {
       if (!formData.phone) newErrors.phone = 'Phone number is required';
       if (!formData.parentName) newErrors.parentName = 'Parent name is required';
@@ -169,50 +166,66 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
     
     setLoading(true);
-    setLoadingProgress(0);
+    setLoadingProgress(20); // Start progress
     
-    // Simulate loading progress
-    const progressInterval = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          return 100;
-        }
-        return prev + 10;
+    try {
+      // 1. Create Auth User
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
       });
-    }, 200);
-    
-    // Simulate API call
-    setTimeout(() => {
-      clearInterval(progressInterval);
+
+      if (authError) throw authError;
+      setLoadingProgress(60);
+
+      // 2. If Role is Student, save to students table
+      if (formData.role === 'student' && authData.user) {
+        const { error: dbError } = await supabase
+          .from('students')
+          .insert([{
+            id: authData.user.id,
+            full_name: formData.fullName,
+            student_number: formData.studentNumber,
+            email: formData.email,
+            phone: formData.phone,
+            birth_date: formData.birthDate,
+            parent_name: formData.parentName,
+            parent_phone: formData.parentPhone,
+            subjects: formData.subjects,
+            enrollment_status: 'active'
+          }]);
+
+        if (dbError) throw dbError;
+      }
+
+      setLoadingProgress(100);
       setLoading(false);
       setSignupSuccess(true);
       
-      // Show success message for 3 seconds, then redirect
       setTimeout(() => {
         setRedirecting(true);
         setTimeout(() => {
           navigate('/login');
         }, 1000);
       }, 3000);
-      
-    }, 2000);
+
+    } catch (err) {
+      setLoading(false);
+      setErrors({ form: err.message });
+      alert(err.message); // Direct feedback for errors
+    }
   };
 
   const handleSocialSignup = (provider) => {
     console.log(`Signing up with ${provider}`);
-    // Implement social signup logic
   };
 
   return (
     <>
       <div className="njec-signup-container">
-        {/* Background Elements */}
         <div className="njec-signup-bg-shapes">
           <div className="njec-signup-shape njec-shape-1"></div>
           <div className="njec-signup-shape njec-shape-2"></div>
@@ -220,9 +233,7 @@ const Signup = () => {
         </div>
 
         <div className="njec-signup-wrapper">
-          {/* Left Side - Signup Form */}
           <div className="njec-signup-form-section">
-            {/* Back Button */}
             <button 
               onClick={() => navigate('/')}
               className="njec-signup-back-button"
@@ -231,7 +242,6 @@ const Signup = () => {
               Back to Home
             </button>
 
-            {/* Logo/Brand */}
             <div className="njec-signup-header">
               <div className="njec-signup-logo">
                 <div className="njec-signup-logo-icon">
@@ -244,7 +254,6 @@ const Signup = () => {
               </div>
             </div>
 
-            {/* Form Container */}
             <div className="njec-signup-form-container">
               <div className="njec-signup-form-header">
                 <h2>Create Account</h2>
@@ -252,7 +261,6 @@ const Signup = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="njec-signup-form">
-                {/* Full Name */}
                 <div className="njec-signup-form-group">
                   <label htmlFor="fullName" className="njec-signup-form-label">
                     <User size={18} />
@@ -278,7 +286,6 @@ const Signup = () => {
                   )}
                 </div>
 
-                {/* Email */}
                 <div className="njec-signup-form-group">
                   <label htmlFor="email" className="njec-signup-form-label">
                     <Mail size={18} />
@@ -304,7 +311,6 @@ const Signup = () => {
                   )}
                 </div>
 
-                {/* Role Selection */}
                 <div className="njec-signup-form-group">
                   <label htmlFor="role" className="njec-signup-form-label">
                     <Users size={18} />
@@ -334,7 +340,6 @@ const Signup = () => {
                   )}
                 </div>
 
-                {/* Student Specific Information */}
                 {formData.role === 'student' && (
                   <div className="njec-student-info-section">
                     <h4 className="njec-student-info-title">
@@ -342,7 +347,6 @@ const Signup = () => {
                       Student Information
                     </h4>
                     
-                    {/* Phone & Student Number */}
                     <div className="njec-signup-form-grid">
                       <div className="njec-signup-form-group">
                         <label htmlFor="phone" className="njec-signup-form-label">
@@ -382,7 +386,6 @@ const Signup = () => {
                       </div>
                     </div>
 
-                    {/* Parent Information */}
                     <div className="njec-signup-form-grid">
                       <div className="njec-signup-form-group">
                         <label htmlFor="parentName" className="njec-signup-form-label">
@@ -425,7 +428,6 @@ const Signup = () => {
                       </div>
                     </div>
 
-                    {/* Birth Date */}
                     <div className="njec-signup-form-group">
                       <label htmlFor="birthDate" className="njec-signup-form-label">
                         <Calendar size={18} />
@@ -445,7 +447,6 @@ const Signup = () => {
                       )}
                     </div>
 
-                    {/* Subjects */}
                     <div className="njec-signup-form-group">
                       <label className="njec-signup-form-label">
                         <BookOpen size={18} />
@@ -471,7 +472,6 @@ const Signup = () => {
                   </div>
                 )}
 
-                {/* Password */}
                 <div className="njec-signup-form-group">
                   <label htmlFor="password" className="njec-signup-form-label">
                     <Lock size={18} />
@@ -512,7 +512,6 @@ const Signup = () => {
                   )}
                 </div>
 
-                {/* Confirm Password */}
                 <div className="njec-signup-form-group">
                   <label htmlFor="confirmPassword" className="njec-signup-form-label">
                     <Key size={18} />
@@ -543,7 +542,6 @@ const Signup = () => {
                   )}
                 </div>
 
-                {/* Terms and Conditions */}
                 <div className="njec-signup-terms">
                   <input
                     type="checkbox"
@@ -561,7 +559,6 @@ const Signup = () => {
                   <span className="njec-signup-error-message">{errors.acceptTerms}</span>
                 )}
 
-                {/* Submit Button */}
                 <button
                   type="submit"
                   className="njec-signup-submit-button"
@@ -580,12 +577,10 @@ const Signup = () => {
                   )}
                 </button>
 
-                {/* Divider */}
                 <div className="njec-signup-divider">
                   <span>Or continue with</span>
                 </div>
 
-                {/* Social Signup Buttons */}
                 <div className="njec-signup-social">
                   <button
                     type="button"
@@ -607,7 +602,6 @@ const Signup = () => {
                   </button>
                 </div>
 
-                {/* Login Link */}
                 <div className="njec-login-link-section">
                   <User size={18} />
                   <span>Already have an account?</span>
@@ -617,7 +611,6 @@ const Signup = () => {
                 </div>
               </form>
 
-              {/* Trust Badge */}
               <div className="njec-signup-trust">
                 <Shield size={20} />
                 <span>Your data is securely protected</span>
@@ -625,17 +618,14 @@ const Signup = () => {
             </div>
           </div>
 
-          {/* Right Side - Testimonial/Info */}
           <div className="njec-signup-info-section">
             <div className="njec-signup-info-card">
-              {/* Quote Icon */}
               <div className="njec-signup-quote-icon">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
                 </svg>
               </div>
 
-              {/* Testimonial */}
               <div className="njec-signup-testimonial">
                 <h3>What our Students Say</h3>
                 <p className="njec-signup-testimonial-text">
@@ -652,7 +642,6 @@ const Signup = () => {
                 </div>
               </div>
 
-              {/* CTA Section */}
               <div className="njec-signup-cta">
                 <h3>Get your learning journey started</h3>
                 <p>
@@ -668,7 +657,6 @@ const Signup = () => {
                 </button>
               </div>
 
-              {/* Additional Info */}
               <div className="njec-signup-additional-info">
                 <p>
                   Be on the lookout for new courses and learning opportunities 
@@ -691,7 +679,6 @@ const Signup = () => {
               </div>
             </div>
 
-            {/* Decorative Elements */}
             <div className="njec-signup-info-decoration">
               <div className="njec-signup-decoration-dot njec-signup-dot-1"></div>
               <div className="njec-signup-decoration-dot njec-signup-dot-2"></div>
@@ -701,7 +688,6 @@ const Signup = () => {
         </div>
       </div>
 
-      {/* Loading Overlay */}
       {loading && (
         <div className="njec-signup-loading">
           <div className="njec-signup-loading-content">
@@ -720,7 +706,6 @@ const Signup = () => {
         </div>
       )}
 
-      {/* Success Overlay */}
       {signupSuccess && (
         <div className="njec-signup-success">
           <div className="njec-signup-success-content">
@@ -735,7 +720,7 @@ const Signup = () => {
             </p>
             {!redirecting && (
               <div className="njec-signup-progress-bar">
-                <div className="njec-signup-progress-fill"></div>
+                <div className="njec-signup-progress-fill" style={{ width: '100%' }}></div>
               </div>
             )}
           </div>
