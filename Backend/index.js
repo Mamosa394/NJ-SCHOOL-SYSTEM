@@ -362,6 +362,18 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+app.get("/api/students", async (req, res) => {
+  const { data, error } = await supabase
+    .from("students")
+    .select("*");
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  res.json(data);
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
