@@ -20,7 +20,7 @@ import {
   GraduationCap,
   ChevronRight
 } from 'lucide-react';
-import { supabase } from '../index'; // Added Supabase Client
+
 import '../styles/signup.css';
 import Logo from "../assets/Logo.jpg";
 
