@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
 
 // ES Modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -33,7 +34,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 console.log('✅ Environment variables loaded');
 console.log(`🔧 Supabase URL: ${supabaseUrl}`);
-console.log(`🔑 Key starts with: ${supabaseAnonKey.substring(0, 10)}...`);
 
 // Initialize Supabase clients
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -50,18 +50,35 @@ if (supabaseServiceKey && supabaseServiceKey.trim() !== '') {
   console.log('✅ Service role client initialized (RLS bypass enabled)');
 } else {
   console.log('⚠️  No service role key provided. RLS may block operations.');
-  console.log('ℹ️  Add SUPABASE_SERVICE_ROLE_KEY to your .env file from Supabase dashboard');
 }
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
-  origin: true, // React frontend
+  origin: ['http://localhost:3000', 'http://localhost:5173'], // Add your frontend URLs
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, and JPG are allowed.'));
+    }
+  }
+});
 
 // ==================== AUTH MIDDLEWARE ====================
 const extractSupabaseUser = async (req, res, next) => {
@@ -71,7 +88,6 @@ const extractSupabaseUser = async (req, res, next) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       
-      // Verify token with Supabase
       const { data: { user }, error } = await supabase.auth.getUser(token);
       
       if (!error && user) {
@@ -87,12 +103,13 @@ const extractSupabaseUser = async (req, res, next) => {
   }
 };
 
-// Apply auth middleware to all routes (optional)
+// Apply auth middleware to all routes
 app.use(extractSupabaseUser);
 
 // ==================== HEALTH CHECK ====================
 app.get('/api/health', (req, res) => {
   res.json({
+    success: true,
     status: 'healthy',
     server: 'Express.js',
     supabase: 'Connected',
@@ -100,80 +117,67 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ==================== TEST SCHEMA ENDPOINT ====================
-app.get('/api/students/test/schema', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .limit(1);
-    
-    if (error) {
-      return res.status(400).json({ error: error.message });
+// ==================== PHONE FORMATTING HELPER ====================
+const formatPhoneNumber = (phone) => {
+  if (!phone) return null;
+  
+  // Remove all spaces
+  let cleaned = phone.replace(/\s+/g, '');
+  
+  // If it starts with +, keep the + and only keep digits after it
+  if (cleaned.startsWith('+')) {
+    const digits = cleaned.substring(1).replace(/\D/g, '');
+    if (digits.length >= 7) {
+      return `+${digits}`;
     }
-    
-    if (data && data.length > 0) {
-      const sample = data[0];
-      res.json({
-        success: true,
-        table_exists: true,
-        sample_fields: Object.keys(sample),
-        sample_data: sample
-      });
-    } else {
-      res.json({
-        success: true,
-        table_exists: true,
-        message: 'Table exists but is empty',
-        expected_fields: [
-          'id', 'full_name', 'student_number', 'email', 'phone', 'birth_date',
-          'gender', 'enrollment_status', 'grade_level', 'grade_numeric',
-          'subjects', 'home_address', 'parent_name', 'parent_phone',
-          'created_at', 'updated_at', 'created_by', 'updated_by',
-          'deleted_at', 'deleted_by'
-        ]
-      });
+  } else {
+    // Otherwise just keep digits
+    const digits = cleaned.replace(/\D/g, '');
+    if (digits.length >= 7) {
+      // Assume Lesotho country code +266
+      return `+266${digits.slice(-7)}`;
     }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
-});
+  
+  return null; // Invalid phone number
+};
 
-// ==================== STUDENT REGISTRATION (FIXED VERSION) ====================
+// ==================== STUDENT REGISTRATION ====================
 app.post('/api/students', async (req, res) => {
-  let userId; // Declare here for cleanup
   try {
     console.log('📥 Received student registration request');
+    console.log('Request body:', req.body);
     
-    // Extract all fields from the request body
+    // Check authentication
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const userId = req.user.id;
+    const studentData = req.body;
+    
+    console.log('Processing student data:', studentData);
+
     const {
       full_name,
       student_number,
       email,
-      password,
       phone,
       birth_date,
       gender,
-      enrollment_status = 'active',
-      grade_level = 'Grade 10',
+      grade_level = 'Grade 11',
       subjects = [],
-      home_address,
-      parent_name,
-      parent_phone
-    } = req.body;
+      enrollment_status = 'pending'
+    } = studentData;
 
-    // Log received data
-    console.log(`📝 Processing registration for: ${full_name}`);
-    console.log(`📧 Email: ${email}`);
-    console.log(`#️⃣ Student #: ${student_number}`);
-    console.log(`📚 Grade level: ${grade_level}`);
-
-    // Validation
-    const requiredFields = ['full_name', 'student_number', 'email', 'password'];
-    const missingFields = requiredFields.filter(field => !req.body[field]);
+    // Validate required fields
+    const requiredFields = ['full_name', 'student_number', 'email', 'phone', 'birth_date', 'gender'];
+    const missingFields = requiredFields.filter(field => !studentData[field]);
     
     if (missingFields.length > 0) {
-      console.log(`❌ Missing required fields: ${missingFields.join(', ')}`);
       return res.status(400).json({
         success: false,
         error: `Missing required fields: ${missingFields.join(', ')}`
@@ -183,238 +187,650 @@ app.post('/api/students', async (req, res) => {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      console.log(`❌ Invalid email format: ${email}`);
       return res.status(400).json({
         success: false,
         error: 'Invalid email format'
       });
     }
 
-    // ========== CRITICAL FIX: STUDENT NUMBER FORMAT ==========
-    let finalStudentNumber = String(student_number).replace(/\D/g, ''); // Remove non-digits
-    
+    // Format student number
+    let finalStudentNumber = String(student_number).replace(/\D/g, '');
     if (finalStudentNumber.length !== 9) {
-      console.log(`⚠️ Student number "${student_number}" is ${finalStudentNumber.length} digits, needs to be 9`);
-      
-      // Pad with zeros to make 9 digits
       if (finalStudentNumber.length < 9) {
         finalStudentNumber = finalStudentNumber.padStart(9, '0');
-      }
-      // If longer than 9, truncate
-      else if (finalStudentNumber.length > 9) {
+      } else {
         finalStudentNumber = finalStudentNumber.substring(0, 9);
       }
-      
-      console.log(`✅ Formatted student number: ${finalStudentNumber}`);
     }
 
-    // ========== CRITICAL FIX: GRADE LEVEL VALIDATION ==========
-    let finalGradeLevel = grade_level;
-    const validGradeLevels = ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
-    
-    // Check if grade_level is valid, otherwise default to Grade 10
-    if (!validGradeLevels.includes(grade_level)) {
-      console.log(`⚠️ Invalid grade level "${grade_level}", defaulting to "Grade 10"`);
-      finalGradeLevel = 'Grade 10';
-    }
+    // Format phone number to pass database constraint
+    const formattedPhone = formatPhoneNumber(phone);
+    console.log(`📞 Phone formatted from "${phone}" to "${formattedPhone}"`);
 
-    console.log(`✅ Using grade level: ${finalGradeLevel}`);
-
-    // Check if student number already exists (using admin client to bypass RLS)
-    console.log('🔍 Checking if student number exists...');
-    const { data: existingStudent, error: checkError } = await supabaseAdmin
+    // Check if student number already exists
+    const { data: existingStudent } = await supabaseAdmin
       .from('students')
       .select('student_number')
       .eq('student_number', finalStudentNumber)
       .maybeSingle();
 
-    if (checkError) {
-      console.log('❌ Error checking student number:', checkError);
-    }
-
     if (existingStudent) {
-      console.log(`❌ Student number ${finalStudentNumber} already exists`);
-      
       // Generate a new unique student number
       const year = new Date().getFullYear();
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      finalStudentNumber = `${year}${random}${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`.slice(0, 9);
+      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      finalStudentNumber = `${year}${random}`.slice(0, 9);
       console.log(`🔄 Generated new student number: ${finalStudentNumber}`);
     }
 
     // Check if email already exists
-    console.log('🔍 Checking if email exists...');
-    const { data: existingEmail, error: emailCheckError } = await supabaseAdmin
+    const { data: existingEmail } = await supabaseAdmin
       .from('students')
       .select('email')
       .eq('email', email)
       .maybeSingle();
 
     if (existingEmail) {
-      console.log(`❌ Email ${email} already registered`);
       return res.status(400).json({
         success: false,
         error: `Email ${email} is already registered`
       });
     }
 
-    // 1. Create user in Supabase Auth (using regular client)
-    console.log('🔐 Creating user in Supabase Auth...');
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name,
-          user_type: 'student',
-          student_number: finalStudentNumber,
-          grade_level: finalGradeLevel
-        }
-      }
-    });
-
-    if (authError) {
-      console.log(`❌ Auth error: ${authError.message}`);
-      return res.status(400).json({
-        success: false,
-        error: `Auth error: ${authError.message}`
-      });
-    }
-
-    userId = authData.user.id;
-    console.log(`✅ Auth user created with ID: ${userId}`);
-
-    // 2. Insert into students table using ADMIN CLIENT (bypasses RLS)
-    console.log('💾 Inserting into students table...');
-    
-    // Prepare student data - FIX: Remove grade_numeric (it's generated)
-    const studentData = {
+    // Prepare student data for insertion
+    const studentRecord = {
       id: userId,
       full_name,
       student_number: finalStudentNumber,
       email,
-      phone: phone || null,
-      birth_date: birth_date || null,
+      phone: formattedPhone,
+      birth_date,
       gender,
       enrollment_status,
-      grade_level: finalGradeLevel, // Use validated grade level
-      // ⚠️ DO NOT include grade_numeric - it's generated by database
-      subjects: Array.isArray(subjects) ? subjects : 
-                (typeof subjects === 'string' ? subjects.split(',').map(s => s.trim()).filter(s => s) : []),
-      home_address: home_address || null,
-      parent_name: parent_name || null,
-      parent_phone: parent_phone || null,
+      grade_level,
+      subjects: Array.isArray(subjects) ? subjects : [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: userId,
       updated_by: userId
     };
 
-    console.log('📊 Student data to insert:', JSON.stringify({
-      id: studentData.id,
-      full_name: studentData.full_name,
-      student_number: studentData.student_number,
-      email: studentData.email,
-      grade_level: studentData.grade_level,
-      gender: studentData.gender
-    }, null, 2));
+    console.log('📊 Inserting student data:', studentRecord);
 
-    // Try insertion with admin client (bypasses RLS)
-    let studentRecord;
-    let dbError;
-    
-    try {
-      const result = await supabaseAdmin
-        .from('students')
-        .insert([studentData])
-        .select()
-        .single();
-      
-      studentRecord = result.data;
-      dbError = result.error;
-    } catch (error) {
-      dbError = error;
-    }
+    // Insert into students table
+    const { data: insertedStudent, error: dbError } = await supabaseAdmin
+      .from('students')
+      .insert([studentRecord])
+      .select()
+      .single();
 
     if (dbError) {
-      console.log('❌ Database insertion error:', dbError);
-      console.log('Full error details:', JSON.stringify(dbError, null, 2));
+      console.error('❌ Database insertion error:', dbError);
       
-      // Special handling for generated column error
-      if (dbError.message.includes('generated column') || dbError.message.includes('grade_numeric')) {
-        console.log('⚠️ grade_numeric is a generated column, trying without it...');
-        
-        // Ensure grade_numeric is not in the data
-        const { grade_numeric, ...dataWithoutGradeNumeric } = studentData;
-        
-        const retryResult = await supabaseAdmin
-          .from('students')
-          .insert([dataWithoutGradeNumeric])
-          .select()
-          .single();
-          
-        if (retryResult.error) {
-          throw retryResult.error;
-        }
-        
-        studentRecord = retryResult.data;
-        console.log('✅ Inserted without grade_numeric');
-      } else {
-        throw dbError;
+      if (dbError.code === '23505') { // Unique violation
+        return res.status(400).json({
+          success: false,
+          error: 'Student number or email already exists'
+        });
       }
+      
+      if (dbError.code === '23514') { // Check constraint violation
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid data format. Please check phone number format.'
+        });
+      }
+      
+      throw dbError;
     }
 
     console.log(`✅ Successfully registered student: ${full_name}`);
-    console.log(`🎓 Student ID: ${userId}`);
-    console.log(`📚 Grade: ${finalGradeLevel}`);
-    console.log(`🔢 Student Number: ${finalStudentNumber}`);
+    console.log(`🎓 Student Number: ${finalStudentNumber}`);
 
-    // Auto-confirm email for testing (optional)
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(userId, {
-          email_confirm: true
+    res.status(201).json({
+      success: true,
+      message: 'Student registered successfully',
+      data: insertedStudent
+    });
+
+  } catch (error) {
+    console.error('🔥 Server error in student registration:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      message: error.message
+    });
+  }
+});
+
+// ==================== COMPLETE REGISTRATION WITH PAYMENT ====================
+app.post('/api/complete-registration', upload.single('paymentProof'), async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    console.log('📥 Complete registration request for:', req.user.email);
+    
+    // Parse the registration data
+    let registrationData;
+    try {
+      registrationData = JSON.parse(req.body.data || '{}');
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid registration data format'
+      });
+    }
+
+    console.log('Registration data:', registrationData);
+
+    const userId = req.user.id;
+    
+    const {
+      full_name,
+      student_number,
+      email,
+      phone,
+      birth_date,
+      gender,
+      grade_level = 'Grade 11',
+      subjects = [],
+      payment_method,
+      payment_number,
+      payer_name
+    } = registrationData;
+
+    // Validate required fields
+    const requiredFields = ['full_name', 'student_number', 'email', 'phone', 'birth_date', 'gender'];
+    const missingFields = requiredFields.filter(field => !registrationData[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Missing required fields: ${missingFields.join(', ')}`
+      });
+    }
+
+    // Format student number
+    let finalStudentNumber = String(student_number).replace(/\D/g, '');
+    if (finalStudentNumber.length !== 9) {
+      if (finalStudentNumber.length < 9) {
+        finalStudentNumber = finalStudentNumber.padStart(9, '0');
+      } else {
+        finalStudentNumber = finalStudentNumber.substring(0, 9);
+      }
+    }
+
+    // Format phone number to pass database constraint
+    const formattedPhone = formatPhoneNumber(phone);
+    console.log(`📞 Phone formatted from "${phone}" to "${formattedPhone}"`);
+
+    // Check if student number already exists
+    const { data: existingStudent } = await supabaseAdmin
+      .from('students')
+      .select('student_number')
+      .eq('student_number', finalStudentNumber)
+      .maybeSingle();
+
+    if (existingStudent) {
+      // Generate a new unique student number
+      const year = new Date().getFullYear();
+      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      finalStudentNumber = `${year}${random}`.slice(0, 9);
+      console.log(`🔄 Generated new student number: ${finalStudentNumber}`);
+    }
+
+    // Check if email already exists
+    const { data: existingEmail } = await supabaseAdmin
+      .from('students')
+      .select('email')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        error: `Email ${email} is already registered`
+      });
+    }
+
+    // Prepare student data for insertion
+    const studentRecord = {
+      id: userId,
+      full_name,
+      student_number: finalStudentNumber,
+      email,
+      phone: formattedPhone,
+      birth_date,
+      gender,
+      enrollment_status: 'pending',
+      grade_level,
+      subjects: Array.isArray(subjects) ? subjects : [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: userId,
+      updated_by: userId
+    };
+
+    console.log('📊 Inserting student data');
+
+    // Insert into students table
+    const { data: insertedStudent, error: dbError } = await supabaseAdmin
+      .from('students')
+      .insert([studentRecord])
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error('❌ Database insertion error:', dbError);
+      
+      if (dbError.code === '23505') { // Unique violation
+        return res.status(400).json({
+          success: false,
+          error: 'Student number or email already exists'
         });
-        console.log('📧 Email auto-confirmed for development');
-      } catch (confirmError) {
-        console.log('⚠️ Could not auto-confirm email:', confirmError.message);
+      }
+      
+      if (dbError.code === '23514') { // Check constraint violation
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid data format. Please check phone number format.'
+        });
+      }
+      
+      throw dbError;
+    }
+
+    console.log(`✅ Successfully registered student: ${full_name}`);
+
+    // Handle payment proof if uploaded
+    let paymentProofUrl = null;
+    if (req.file) {
+      console.log('📸 Uploading payment proof...');
+      
+      const fileName = `${insertedStudent.id}/${Date.now()}_payment.${req.file.originalname.split('.').pop()}`;
+      
+      const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+        .from('payment-proofs')
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          cacheControl: '3600'
+        });
+
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabaseAdmin.storage
+          .from('payment-proofs')
+          .getPublicUrl(fileName);
+        
+        paymentProofUrl = publicUrl;
+        console.log('✅ Payment proof uploaded:', paymentProofUrl);
+      } else {
+        console.error('❌ Payment proof upload failed:', uploadError);
+      }
+    }
+
+    // Save payment information
+    if (payment_method) {
+      // Calculate total amount based on subjects
+      const subjectPrices = {
+        math: 450, physics: 500, sesotho: 350, english: 400,
+        economics: 480, accounts: 520, biology: 470, computers: 490, geography: 430
+      };
+      
+      const totalAmount = (subjects || []).reduce(
+        (total, subject) => total + (subjectPrices[subject] || 0), 0
+      );
+
+      const paymentData = {
+        student_id: insertedStudent.id,
+        payment_method,
+        payment_number,
+        payer_name,
+        payment_proof_url: paymentProofUrl,
+        amount: totalAmount,
+        subjects: subjects || [],
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: userId,
+        updated_by: userId
+      };
+
+      console.log('💰 Saving payment record');
+
+      const { error: paymentError } = await supabaseAdmin
+        .from('payments')
+        .insert([paymentData]);
+
+      if (paymentError) {
+        console.error('❌ Payment record failed:', paymentError);
+      } else {
+        console.log('✅ Payment record saved');
       }
     }
 
     res.status(201).json({
       success: true,
-      message: 'Student registered successfully',
-      data: studentRecord,
-      user: {
-        id: authData.user.id,
-        email: authData.user.email,
-        full_name: authData.user.user_metadata?.full_name,
-        confirmed: authData.user.email_confirmed_at !== null
-      },
-      note: 'Registration completed successfully'
+      message: 'Registration completed successfully',
+      data: {
+        student: insertedStudent,
+        payment_proof: paymentProofUrl
+      }
     });
 
   } catch (error) {
-    console.error('🔥 Server error in student registration:', error);
-    console.error('Error stack:', error.stack);
-    
-    // Cleanup: If user was created but student record failed, delete the auth user
-    if (userId) {
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        console.log(`🧹 Cleaned up auth user ${userId} due to error`);
-      } catch (cleanupError) {
-        console.log('⚠️ Could not cleanup auth user:', cleanupError.message);
-      }
-    }
-    
-    res.status(400).json({
+    console.error('🔥 Complete registration error:', error);
+    res.status(500).json({
       success: false,
       error: 'Registration failed',
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint
+      message: error.message
+    });
+  }
+});
+
+// ==================== PAYMENT ENDPOINTS ====================
+
+// Upload payment proof only
+app.post('/api/upload-payment-proof', upload.single('paymentProof'), async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded'
+      });
+    }
+
+    const { studentId } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Student ID is required'
+      });
+    }
+
+    console.log(`📤 Uploading payment proof for student: ${studentId}`);
+
+    // Generate unique filename
+    const fileExt = req.file.originalname.split('.').pop();
+    const fileName = `${studentId}/${Date.now()}_payment.${fileExt}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+      .from('payment-proofs')
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        cacheControl: '3600'
+      });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      throw uploadError;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('payment-proofs')
+      .getPublicUrl(fileName);
+
+    console.log('✅ Payment proof uploaded successfully');
+
+    res.json({
+      success: true,
+      message: 'Payment proof uploaded successfully',
+      data: {
+        url: publicUrl,
+        path: fileName
+      }
+    });
+
+  } catch (error) {
+    console.error('🔥 Upload error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to upload payment proof',
+      message: error.message
+    });
+  }
+});
+
+// Submit payment information
+app.post('/api/payments', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const {
+      student_id,
+      payment_method,
+      payment_number,
+      payer_name,
+      payment_proof_url,
+      amount,
+      subjects
+    } = req.body;
+
+    // Validate required fields
+    const requiredFields = ['student_id', 'payment_method', 'payment_number', 'payer_name', 'amount', 'subjects'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Missing required fields: ${missingFields.join(', ')}`
+      });
+    }
+
+    console.log(`💰 Processing payment for student: ${student_id}`);
+
+    // Check if student exists
+    const { data: student, error: studentError } = await supabaseAdmin
+      .from('students')
+      .select('id')
+      .eq('id', student_id)
+      .single();
+
+    if (studentError || !student) {
+      return res.status(404).json({
+        success: false,
+        error: 'Student not found'
+      });
+    }
+
+    // Prepare payment data
+    const paymentData = {
+      student_id,
+      payment_method,
+      payment_number,
+      payer_name,
+      payment_proof_url,
+      amount,
+      subjects,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: req.user.id,
+      updated_by: req.user.id
+    };
+
+    // Insert payment record
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from('payments')
+      .insert([paymentData])
+      .select()
+      .single();
+
+    if (paymentError) {
+      console.error('Payment insertion error:', paymentError);
+      throw paymentError;
+    }
+
+    console.log('✅ Payment recorded successfully');
+
+    res.status(201).json({
+      success: true,
+      message: 'Payment information saved successfully',
+      data: payment
+    });
+
+  } catch (error) {
+    console.error('🔥 Payment error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save payment information',
+      message: error.message
+    });
+  }
+});
+
+// Get payments for a student
+app.get('/api/payments/student/:studentId', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const { studentId } = req.params;
+
+    const { data, error } = await supabaseAdmin
+      .from('payments')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payments',
+      message: error.message
+    });
+  }
+});
+
+// Get single payment
+app.get('/api/payments/:paymentId', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const { paymentId } = req.params;
+
+    const { data, error } = await supabaseAdmin
+      .from('payments')
+      .select('*, students(full_name, email, student_number)')
+      .eq('id', paymentId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({
+          success: false,
+          error: 'Payment not found'
+        });
+      }
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error fetching payment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payment',
+      message: error.message
+    });
+  }
+});
+
+// Update payment status (admin only)
+app.put('/api/payments/:paymentId/status', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const { paymentId } = req.params;
+    const { status, notes } = req.body;
+
+    const validStatuses = ['pending', 'verified', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status'
+      });
+    }
+
+    const updateData = {
+      status,
+      notes: notes || null,
+      verified_at: status === 'verified' ? new Date().toISOString() : null,
+      verified_by: status === 'verified' ? req.user.id : null,
+      updated_at: new Date().toISOString(),
+      updated_by: req.user.id
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('payments')
+      .update(updateData)
+      .eq('id', paymentId)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      message: `Payment ${status} successfully`,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update payment status',
+      message: error.message
     });
   }
 });
@@ -446,6 +862,13 @@ app.get('/api/students', async (req, res) => {
 // ==================== GET SINGLE STUDENT ====================
 app.get('/api/students/:id', async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
     const { id } = req.params;
     
     const { data, error } = await supabase
@@ -471,128 +894,6 @@ app.get('/api/students/:id', async (req, res) => {
   }
 });
 
-// ==================== UPDATE STUDENT ====================
-app.put('/api/students/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
-    
-    // Remove grade_numeric if present (it's generated)
-    if (updateData.grade_numeric !== undefined) {
-      delete updateData.grade_numeric;
-      console.log('⚠️ grade_numeric removed from update (generated column)');
-    }
-    
-    // Add updated_at timestamp
-    updateData.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from('students')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating student:', error);
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json({
-      success: true,
-      message: 'Student updated successfully',
-      data: data
-    });
-  } catch (error) {
-    console.error('Server error updating student:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ==================== DELETE STUDENT ====================
-app.delete('/api/students/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const { data, error } = await supabase
-      .from('students')
-      .update({
-        deleted_at: new Date().toISOString(),
-        enrollment_status: 'inactive'
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error deleting student:', error);
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json({
-      success: true,
-      message: 'Student deactivated successfully',
-      data: data
-    });
-  } catch (error) {
-    console.error('Server error deleting student:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ==================== DEBUG ENDPOINTS ====================
-
-// Test RLS and constraints
-app.get('/api/debug/grade-levels', async (req, res) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('students')
-      .select('grade_level')
-      .order('grade_level');
-    
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-    
-    const uniqueGrades = [...new Set(data?.map(g => g.grade_level) || [])];
-    
-    res.json({
-      success: true,
-      valid_grade_levels_in_use: uniqueGrades,
-      recommended_grade_levels: ['Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'],
-      note: 'Use exactly these values for grade_level to pass check constraint'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Test database constraints
-app.get('/api/debug/constraints', async (req, res) => {
-  try {
-    // Try a simple insert to see what works
-    const testData = {
-      id: '00000000-0000-0000-0000-000000000000',
-      full_name: 'Test Constraint',
-      student_number: '202400001',
-      email: 'test@constraint.com',
-      grade_level: 'Grade 10'
-    };
-    
-    const { error } = await supabaseAdmin
-      .from('students')
-      .insert([testData]);
-    
-    res.json({
-      success: !error,
-      error: error?.message,
-      note: error ? 'Database has constraints' : 'No constraints blocking insert'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ==================== AUTH ENDPOINTS ====================
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -600,6 +901,7 @@ app.post('/api/auth/register', async (req, res) => {
     
     if (!email || !password) {
       return res.status(400).json({
+        success: false,
         error: 'Email and password are required'
       });
     }
@@ -617,7 +919,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (error) {
       console.error('Supabase registration error:', error);
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
     }
 
     res.json({
@@ -631,7 +936,10 @@ app.post('/api/auth/register', async (req, res) => {
 
   } catch (error) {
     console.error('Server registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 });
 
@@ -641,6 +949,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     if (!email || !password) {
       return res.status(400).json({
+        success: false,
         error: 'Email and password are required'
       });
     }
@@ -652,7 +961,10 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (error) {
       console.error('Supabase login error:', error);
-      return res.status(401).json({ error: error.message });
+      return res.status(401).json({ 
+        success: false,
+        error: error.message 
+      });
     }
 
     res.json({
@@ -665,15 +977,16 @@ app.post('/api/auth/login', async (req, res) => {
 
   } catch (error) {
     console.error('Server login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 });
 
 app.post('/api/auth/logout', async (req, res) => {
   try {
-    const token = req.supabaseToken;
-    
-    if (token) {
+    if (req.supabaseToken) {
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Supabase logout error:', error);
@@ -687,7 +1000,10 @@ app.post('/api/auth/logout', async (req, res) => {
 
   } catch (error) {
     console.error('Server logout error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 });
 
@@ -695,25 +1011,44 @@ app.get('/api/auth/profile', async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({
+        success: false,
         error: 'Not authenticated. Please login first.'
       });
     }
 
+    // Get student record if exists
+    const { data: studentData } = await supabaseAdmin
+      .from('students')
+      .select('*')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    // Get payment records if any
+    const { data: paymentData } = await supabaseAdmin
+      .from('payments')
+      .select('*')
+      .eq('student_id', req.user.id)
+      .order('created_at', { ascending: false });
+
     res.json({
       success: true,
-      user: req.user
+      user: req.user,
+      student: studentData || null,
+      payments: paymentData || []
     });
 
   } catch (error) {
     console.error('Profile error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 });
 
-// ==================== TEST SUPABASE CONNECTION ====================
+// ==================== TEST ENDPOINT ====================
 app.get('/api/test', async (req, res) => {
   try {
-    // Test auth connection
     const { data: sessionData } = await supabase.auth.getSession();
     
     res.json({
@@ -722,16 +1057,34 @@ app.get('/api/test', async (req, res) => {
       supabaseUrl: supabaseUrl,
       authWorking: !!sessionData,
       hasServiceKey: !!supabaseServiceKey,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      user: req.user || null
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
-      supabaseUrl: supabaseUrl
+      error: error.message
     });
   }
+});
+
+// ==================== ERROR HANDLING MIDDLEWARE ====================
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// ==================== 404 HANDLER ====================
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found'
+  });
 });
 
 // ==================== START SERVER ====================
@@ -739,21 +1092,33 @@ app.listen(PORT, () => {
   console.log(`
 ✅ Server running on http://localhost:${PORT}
 📚 API Endpoints:
-   POST /api/students      - Register student
-   GET  /api/students      - Get all students  
-   GET  /api/students/:id  - Get single student
-   PUT  /api/students/:id  - Update student
-   DELETE /api/students/:id - Delete student
-   POST /api/auth/register - User registration
-   POST /api/auth/login    - User login
-   GET  /api/health        - Health check
-   GET  /api/test          - Test Supabase
+   POST /api/students                 - Register student
+   GET  /api/students                 - Get all students  
+   GET  /api/students/:id             - Get single student
+   
+   POST /api/payments                  - Save payment info
+   GET  /api/payments/student/:id      - Get student payments
+   GET  /api/payments/:id              - Get single payment
+   PUT  /api/payments/:id/status       - Update payment status
+   
+   POST /api/upload-payment-proof      - Upload payment screenshot
+   POST /api/complete-registration     - Complete registration with payment
+   
+   POST /api/auth/register             - User registration
+   POST /api/auth/login                 - User login
+   POST /api/auth/logout                - User logout
+   GET  /api/auth/profile                - Get user profile
+   
+   GET  /api/health                     - Health check
+   GET  /api/test                       - Test Supabase
 
 🔧 Important Notes:
    • student_number must be 9 digits
    • grade_level must be Grade 8-12
-   • grade_numeric is auto-generated (don't send it)
-   • Add SUPABASE_SERVICE_ROLE_KEY to .env for RLS bypass
+   • Phone numbers are automatically formatted to pass validation
+   • Payment proofs go to Supabase Storage
+   • Payments table created for tracking
+   • All endpoints require Bearer token except auth endpoints
 
 🚀 Ready for student registration!
 `);

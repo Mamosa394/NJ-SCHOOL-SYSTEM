@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from './supabaseClient';
 import '../styles/MultiStageRegistration.css';
 import Logo from '../assets/Logo.jpg';
 import { 
@@ -13,10 +15,15 @@ import {
 } from 'lucide-react';
 
 const MultiStageRegistration = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [currentStage, setCurrentStage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [progressPercentage, setProgressPercentage] = useState(33);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
 
   // Subject data with prices in Maloti (M)
   const subjects = [
@@ -57,6 +64,69 @@ const MultiStageRegistration = () => {
   // Validation states
   const [errors, setErrors] = useState({});
   const [stageErrors, setStageErrors] = useState({});
+
+  // Get the current user on mount
+  useEffect(() => {
+    const getUser = async () => {
+      setIsAuthLoading(true);
+      try {
+        // Get current session and user
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        setSession(session);
+        setUser(user);
+        
+        // If no user, redirect to signup
+        if (!user) {
+          console.log('No user found, redirecting to signup');
+          navigate('/signup');
+          return;
+        }
+
+        console.log('User authenticated:', user.email);
+
+        // Pre-fill email from auth user
+        setStudentInfo(prev => ({
+          ...prev,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || 
+                     user.user_metadata?.name || 
+                     prev.full_name
+        }));
+
+        // Also check location state (from signup)
+        if (location.state) {
+          const { userEmail, userName } = location.state;
+          setStudentInfo(prev => ({
+            ...prev,
+            email: userEmail || prev.email,
+            full_name: userName || prev.full_name
+          }));
+        }
+
+      } catch (error) {
+        console.error('Error getting user:', error);
+        navigate('/signup');
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    getUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (!session) {
+        navigate('/signup');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate, location]);
 
   // Calculate total price
   const calculateTotal = () => {
@@ -137,6 +207,10 @@ const MultiStageRegistration = () => {
       if (studentInfo.student_number && !/^\d{9}$/.test(studentInfo.student_number)) {
         newErrors.student_number = 'Student number must be 9 digits';
       }
+      // Additional validation for student number (not all zeros, not 123456789)
+      if (studentInfo.student_number === '000000000' || studentInfo.student_number === '123456789') {
+        newErrors.student_number = 'Invalid student number';
+      }
       if (!studentInfo.phone.trim()) newErrors.phone = 'Phone number is required';
       if (!studentInfo.birth_date) newErrors.birth_date = 'Birth date is required';
     }
@@ -175,39 +249,136 @@ const MultiStageRegistration = () => {
     }
   };
 
-  // Final submission
-  const handleFinalSubmit = async () => {
-    setIsLoading(true);
-    
-    try {
-      const registrationData = {
-        ...studentInfo,
-        selected_subjects: selectedSubjects,
-        total_amount: calculateTotal(),
-        grade_level: 'Grade 11',
-        payment_method: paymentInfo.payment_method,
-        payment_number: paymentInfo.payment_number,
-        payer_name: paymentInfo.payer_name,
-        enrollment_status: 'pending',
-        registration_date: new Date().toISOString(),
-        has_payment_proof: !!paymentInfo.screenshot
-      };
-
-      // Simulate API call with delay
-      await new Promise(resolve => setTimeout(resolve, 1800));
-
-      // Success
-      setShowSuccess(true);
-
-    } catch (error) {
+  // ==================== UPDATED HANDLE FINAL SUBMIT ====================
+// Final submission - UPDATED
+const handleFinalSubmit = async () => {
+  setIsLoading(true);
+  setStageErrors({});
+  
+  try {
+    // Check if user is authenticated
+    if (!user || !session) {
       setStageErrors(prev => ({ 
         ...prev, 
-        submission: 'Registration failed. Please try again.' 
+        submission: 'You must be logged in to register. Redirecting to signup...' 
       }));
-    } finally {
-      setIsLoading(false);
+      setTimeout(() => navigate('/signup'), 2000);
+      return;
     }
-  };
+
+    console.log('📝 Starting registration process...');
+    console.log('User:', user.email);
+
+    // Create FormData for multipart upload
+    const formData = new FormData();
+    
+    // Prepare all registration data
+    const registrationData = {
+      full_name: studentInfo.full_name,
+      student_number: studentInfo.student_number,
+      email: studentInfo.email,
+      phone: studentInfo.phone,
+      birth_date: studentInfo.birth_date,
+      gender: studentInfo.gender,
+      grade_level: 'Grade 11',
+      class_type: studentInfo.class_type,
+      subjects: selectedSubjects,
+      payment_method: paymentInfo.payment_method,
+      payment_number: paymentInfo.payment_number,
+      payer_name: paymentInfo.payer_name
+    };
+
+    // Add the data as a JSON string
+    formData.append('data', JSON.stringify(registrationData));
+    
+    // Add payment screenshot if exists
+    if (paymentInfo.screenshot) {
+      formData.append('paymentProof', paymentInfo.screenshot);
+      console.log('📸 Payment screenshot attached');
+    }
+
+    console.log('📡 Sending to backend...');
+
+    // Try the complete-registration endpoint first (handles both student and payment)
+    const response = await axios.post(
+      'http://localhost:5000/api/complete-registration',
+      formData,
+      {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'multipart/form-data'
+        },
+        timeout: 30000
+      }
+    );
+
+    console.log('✅ Registration successful!');
+    console.log('Response:', response.data);
+
+    setShowSuccess(true);
+
+  } catch (error) {
+    console.error('❌ Registration error details:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method
+      }
+    });
+    
+    if (error.response) {
+      // Show specific error message from backend
+      const errorMsg = error.response.data?.error || 
+                      error.response.data?.message || 
+                      'Registration failed';
+      setStageErrors(prev => ({ 
+        ...prev, 
+        submission: errorMsg 
+      }));
+    } else if (error.request) {
+      setStageErrors(prev => ({ 
+        ...prev, 
+        submission: 'No response from server. Please check your connection.' 
+      }));
+    } else {
+      setStageErrors(prev => ({ 
+        ...prev, 
+        submission: error.message || 'Registration failed' 
+      }));
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
+  // Show loading while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="njec-loading-container">
+        <div className="njec-loading-spinner">
+          <div className="njec-loading-circle"></div>
+          <div className="njec-loading-circle"></div>
+          <div className="njec-loading-circle"></div>
+        </div>
+        <p>Loading your information...</p>
+      </div>
+    );
+  }
+
+  // Show message if no user
+  if (!user) {
+    return (
+      <div className="njec-error-container">
+        <AlertCircle size={48} />
+        <h3>Not Authenticated</h3>
+        <p>Please sign up or log in to continue.</p>
+        <button onClick={() => navigate('/signup')} className="njec-btn njec-btn-primary">
+          Go to Sign Up
+        </button>
+      </div>
+    );
+  }
 
   // Loading Spinner Component
   const LoadingSpinner = () => (
@@ -251,7 +422,8 @@ const MultiStageRegistration = () => {
         </div>
         <div className="njec-stage-header-text">
           <h3 className="njec-stage-title">Student Information</h3>
-          <p className="njec-stage-subtitle">Please provide your personal details to begin the registration process</p>
+          <p className="njec-stage-subtitle">Please provide your personal details to complete registration</p>
+          {user && <p className="njec-user-info">Logged in as: {user.email}</p>}
         </div>
       </div>
 
@@ -320,6 +492,7 @@ const MultiStageRegistration = () => {
                 onChange={handleStudentInfoChange}
                 className={`njec-form-input ${errors.email ? 'njec-input-error' : ''}`}
                 placeholder="student@example.com"
+                readOnly // Email comes from auth, shouldn't be changed
               />
               {errors.email && (
                 <div className="njec-error-message">
@@ -390,8 +563,8 @@ const MultiStageRegistration = () => {
             >
               <option value="Male">Male</option>
               <option value="Female">Female</option>
-              <option value="Other">Other</option>
             </select>
+            <p className="njec-field-hint">Note: Only Male/Female accepted by system</p>
           </div>
         </div>
       </div>
@@ -838,10 +1011,13 @@ const MultiStageRegistration = () => {
               Register Another Student
             </button>
             <button
-              onClick={() => setShowSuccess(false)}
+              onClick={() => {
+                setShowSuccess(false);
+                navigate('/dashboard');
+              }}
               className="njec-btn njec-btn-outline"
             >
-              Return to Dashboard
+              Go to Dashboard
             </button>
           </div>
         </div>

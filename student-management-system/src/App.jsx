@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import HomePage from "./components/HomePage";
-// import Signup from "./components/Signup";
+import Signup from "./components/Signup";
 import Login from "./components/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -9,6 +9,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
 import MultiStageRegistration from './components/MultiStageRegistration';
 import './App.css';
+import SignUp from './components/Signup';
+import AdminVerification from './admin_only/AdminVerification';
 
 // ✅ Security Gatekeeper Component
 const ProtectedRoute = ({ allowedRoles }) => {
@@ -33,7 +35,10 @@ function App() {
         <Route path="/ss" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/s" element={<StudentRegistration />} />
-        <Route path="/" element={<MultiStageRegistration />} />
+        <Route path="/s" element={<SignUp />} />
+        <Route path="/registration" element={<MultiStageRegistration />} />
+          <Route path="/adminVerification" element={<AdminVerification />} />
+
 
 
         
@@ -42,6 +47,8 @@ function App() {
         {/* Admin Only */}
         <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/adminVerification" element={<AdminVerification />} />
+
         </Route>
 
         {/* Teacher Only */}

@@ -1,612 +1,651 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { 
-  Mail, 
-  Lock, 
-  ArrowRight, 
-  Eye, 
-  EyeOff,
-  Shield,
-  User,
-  // Phone, // Removed as per request
-  Calendar,
-  BookOpen,
-  Users,
-  Key,
-  CheckCircle,
-  Loader2,
-  // AlertCircle, // Unused
-  ArrowLeft,
-  GraduationCap,
-  ChevronRight
+import { useNavigate } from 'react-router-dom';
+import {
+  Mail, ArrowRight, AlertCircle, Lock,
+  User, Shield, Eye, EyeOff, Sparkles,
+  Award, Target, Zap, Users, TrendingUp,
+  ChevronRight, CheckCircle
 } from 'lucide-react';
-
+import { FcGoogle } from 'react-icons/fc';
+import Logo from '../assets/Logo.jpg';
+import { supabase } from './supabaseClient';
 import '../styles/signup.css';
-import Logo from "../assets/Logo.jpg";
 
-const Signup = () => {
+const SignUp = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
+  const [isLoading, setIsLoading] = useState(false);
+  const [signUpMethod, setSignUpMethod] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false); // Prevent multiple redirects
+  
+  // Email sign up form state
+  const [emailSignUp, setEmailSignUp] = useState({
     fullName: '',
-    studentNumber: '',
-    // phone: '', // Removed
     email: '',
     password: '',
     confirmPassword: '',
-    role: '',
-    // parentName: '', // Removed
-    // parentPhone: '', // Removed
-    birthDate: '',
-    // subjects: [], // Removed
-    acceptTerms: false
+    agreeToTerms: false
   });
 
-  const [adminCount, setAdminCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState({ level: '', text: '' });
+  // Validation errors
   const [errors, setErrors] = useState({});
-  const [signupSuccess, setSignupSuccess] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
 
-  // Removed subjectsList array
-
-  const roles = [
-    { value: 'student', label: 'Student' },
-    { value: 'teacher', label: 'Teacher' },
-    { value: 'parent', label: 'Parent' },
-    { value: 'admin', label: 'Admin' }
-  ];
-
+  // Check for existing session on mount
   useEffect(() => {
-    const getAdminCount = async () => {
-      try {
-        // Fetch actual admin count from Supabase if needed, or keep simulation
-        setAdminCount(1); 
-      } catch (err) {
-        console.error(err);
+    checkUser();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event); // Debug log
+      
+      if (event === 'SIGNED_IN' && session && !isRedirecting) {
+        setIsRedirecting(true);
+        handleSuccessfulAuth(session.user);
       }
+      
+      if (event === 'TOKEN_REFRESHED') {
+        // Handle token refresh if needed
+        console.log('Token refreshed');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
     };
-    getAdminCount();
-  }, []);
+  }, [isRedirecting]);
 
-  const evaluatePasswordStrength = (password) => {
-    if (password.length === 0) return { level: '', text: '' };
-    if (password.length < 6) return { level: 'weak', text: 'Weak password' };
-    
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-    const hasNumbers = /[0-9]/.test(password);
-    const hasUpper = /[A-Z]/.test(password);
-    const hasLower = /[a-z]/.test(password);
-    
-    const score = [hasSpecial, hasNumbers, hasUpper, hasLower, password.length >= 8]
-      .filter(Boolean).length;
-    
-    if (score >= 4) return { level: 'strong', text: 'Strong password' };
-    if (score >= 3) return { level: 'medium', text: 'Medium password' };
-    return { level: 'weak', text: 'Weak password' };
-  };
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    
-    if (name === 'password') {
-      setPasswordStrength(evaluatePasswordStrength(value));
-    }
-    
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+  const checkUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && !isRedirecting) {
+        setIsRedirecting(true);
+        handleSuccessfulAuth(user);
+      }
+    } catch (error) {
+      console.error('Error checking user:', error);
     }
   };
 
-  // Removed handleSubjectToggle function
+  const handleSuccessfulAuth = (user) => {
+    // Small delay to ensure state is updated
+    setTimeout(() => {
+      navigate('/registration', { 
+        state: { 
+          signUpMethod: user.app_metadata.provider || 'email',
+          userEmail: user.email,
+          userName: user.user_metadata?.full_name || 
+                   user.user_metadata?.name || 
+                   user.email?.split('@')[0],
+          userId: user.id
+        },
+        replace: true // Use replace to prevent back navigation to OAuth page
+      });
+    }, 100);
+  };
 
-  const validateForm = () => {
+  // Handle Google Sign Up - FIXED VERSION
+  const handleGoogleSignUp = async () => {
+    // Prevent double clicks
+    if (isLoading || isRedirecting) return;
+    
+    setIsLoading(true);
+    setErrors({});
+    
+    try {
+      // Clear any existing session first to avoid conflicts
+      await supabase.auth.signOut();
+      
+      // Small delay to ensure signout completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/registration`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          skipBrowserRedirect: false // Ensure it redirects properly
+        }
+      });
+
+      if (error) throw error;
+      
+      // The OAuth redirect will happen automatically
+      // The onAuthStateChange listener will handle the redirect back
+      
+    } catch (error) {
+      console.error('Google sign up error:', error);
+      setErrors({ general: error.message || 'Failed to sign up with Google. Please try again.' });
+      setIsLoading(false);
+      setIsRedirecting(false);
+    }
+  };
+
+  // Handle Email Sign Up
+  const handleEmailSignUp = async () => {
+    // Prevent double clicks
+    if (isLoading || isRedirecting) return;
+    
+    // Validate form
     const newErrors = {};
     
-    if (!formData.fullName) newErrors.fullName = 'Full name is required';
-    if (!formData.email) {
+    if (!emailSignUp.fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    }
+    
+    if (!emailSignUp.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else if (!/\S+@\S+\.\S+/.test(emailSignUp.email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
     
-    if (!formData.role) newErrors.role = 'Please select a role';
-    if (formData.role === 'admin' && adminCount >= 2) {
-      newErrors.role = 'Admin registration limit reached';
-    }
-    
-    if (!formData.password) {
+    if (!emailSignUp.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (emailSignUp.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(emailSignUp.password)) {
+      newErrors.password = 'Password must contain uppercase, lowercase, and number';
     }
     
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
+    if (emailSignUp.password !== emailSignUp.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     
-    if (!formData.acceptTerms) {
-      newErrors.acceptTerms = 'You must accept the terms and conditions';
+    if (!emailSignUp.agreeToTerms) {
+      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
     }
     
-    if (formData.role === 'student') {
-      // Removed checks for phone, parent details, and subjects
-      if (!formData.birthDate) newErrors.birthDate = 'Birth date is required';
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
     }
     
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setLoading(true);
-    setLoadingProgress(20); // Start progress
+    setIsLoading(true);
+    setErrors({});
     
     try {
-      // 1. Create Auth User
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+      // Sign up with Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email: emailSignUp.email,
+        password: emailSignUp.password,
+        options: {
+          data: {
+            full_name: emailSignUp.fullName,
+          },
+          emailRedirectTo: `${window.location.origin}/registration`,
+        }
       });
 
-      if (authError) throw authError;
-      setLoadingProgress(60);
+      if (error) throw error;
 
-      // 2. If Role is Student, save to students table
-      if (formData.role === 'student' && authData.user) {
-        const { error: dbError } = await supabase
-          .from('students')
-          .insert([{
-            id: authData.user.id,
-            full_name: formData.fullName,
-            student_number: formData.studentNumber,
-            email: formData.email,
-            // phone: formData.phone, // Removed
-            birth_date: formData.birthDate,
-            // parent_name: formData.parentName, // Removed
-            // parent_phone: formData.parentPhone, // Removed
-            // subjects: formData.subjects, // Removed
-            enrollment_status: 'active'
-          }]);
-
-        if (dbError) throw dbError;
+      // Check if user already exists
+      if (data?.user?.identities?.length === 0) {
+        setErrors({ 
+          general: 'An account with this email already exists. Please log in instead.',
+          existingUser: true 
+        });
+        setIsLoading(false);
+        return;
       }
 
-      setLoadingProgress(100);
-      setLoading(false);
-      setSignupSuccess(true);
+      // Check if email confirmation is required
+      if (data?.user?.confirmation_sent_at) {
+        // Show success message
+        setErrors({ 
+          success: '✓ Please check your email to confirm your account. Redirecting...' 
+        });
+        
+        // Wait a moment then try to sign in (if auto-confirm is enabled)
+        setTimeout(async () => {
+          try {
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: emailSignUp.email,
+              password: emailSignUp.password,
+            });
+            
+            if (!signInError && signInData.user) {
+              handleSuccessfulAuth(signInData.user);
+            } else {
+              // If can't auto sign in, redirect to login
+              navigate('/login', { 
+                state: { 
+                  message: 'Please check your email to confirm your account before logging in.' 
+                } 
+              });
+            }
+          } catch (err) {
+            navigate('/login', { 
+              state: { 
+                message: 'Please check your email to confirm your account before logging in.' 
+              } 
+            });
+          }
+        }, 3000);
+      } else {
+        // Direct sign in successful
+        handleSuccessfulAuth(data.user);
+      }
       
-      setTimeout(() => {
-        setRedirecting(true);
-        setTimeout(() => {
-          navigate('/login');
-        }, 1000);
-      }, 3000);
-
-    } catch (err) {
-      setLoading(false);
-      setErrors({ form: err.message });
-      alert(err.message); // Direct feedback for errors
+    } catch (error) {
+      console.error('Email sign up error:', error);
+      setErrors({ general: error.message || 'Failed to create account. Please try again.' });
+      setIsLoading(false);
     }
   };
 
-  // Removed handleSocialSignup function
+  // Handle Login redirect
+  const handleLoginClick = (e) => {
+    e.preventDefault();
+    navigate('/login');
+  };
 
-  return (
-    <>
-      <div className="njec-signup-container">
-        <div className="njec-signup-bg-shapes">
-          <div className="njec-signup-shape njec-shape-1"></div>
-          <div className="njec-signup-shape njec-shape-2"></div>
-          <div className="njec-signup-shape njec-shape-3"></div>
+  // Feature Card Component
+  const FeatureCard = ({ icon: Icon, title, description, gradient, delay }) => (
+    <div 
+      className="signup-feature-card" 
+      style={{ 
+        animationDelay: `${delay}s`,
+        '--gradient': gradient 
+      }}
+    >
+      <div className="signup-feature-card-inner">
+        <div className="signup-feature-icon" style={{ background: gradient }}>
+          <Icon size={20} />
+          <div className="signup-feature-icon-glow"></div>
         </div>
-
-        <div className="njec-signup-wrapper">
-          <div className="njec-signup-form-section">
-            <button 
-              onClick={() => navigate('/')}
-              className="njec-signup-back-button"
-            >
-              <ArrowLeft size={18} />
-              Back to Home
-            </button>
-
-            <div className="njec-signup-header">
-              <div className="njec-signup-logo">
-                <div className="njec-signup-logo-icon">
-                  <img src={Logo} alt="NJEC Logo" />
-                </div>
-                <div className="njec-signup-brand">
-                  <h1>NJEC</h1>
-                  <span>New Jerusalem Extra Classes</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="njec-signup-form-container">
-              <div className="njec-signup-form-header">
-                <h2>Create Account</h2>
-                <p>Please fill in your details to register</p>
-              </div>
-
-              <form onSubmit={handleSubmit} className="njec-signup-form">
-                <div className="njec-signup-form-group">
-                  <label htmlFor="fullName" className="njec-signup-form-label">
-                    <User size={18} />
-                    <span>Full Name</span>
-                  </label>
-                  <div className="njec-signup-input-wrapper">
-                    <input
-                      type="text"
-                      id="fullName"
-                      name="fullName"
-                      value={formData.fullName}
-                      onChange={handleChange}
-                      placeholder="Enter your full name"
-                      className={`njec-signup-input ${errors.fullName ? 'error' : formData.fullName ? 'success' : ''}`}
-                      disabled={loading}
-                    />
-                    {formData.fullName && !errors.fullName && (
-                      <CheckCircle size={18} className="njec-signup-input-success" />
-                    )}
-                  </div>
-                  {errors.fullName && (
-                    <span className="njec-signup-error-message">{errors.fullName}</span>
-                  )}
-                </div>
-
-                <div className="njec-signup-form-group">
-                  <label htmlFor="email" className="njec-signup-form-label">
-                    <Mail size={18} />
-                    <span>Email</span>
-                  </label>
-                  <div className="njec-signup-input-wrapper">
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="thabo@gmail.com"
-                      className={`njec-signup-input ${errors.email ? 'error' : formData.email ? 'success' : ''}`}
-                      disabled={loading}
-                    />
-                    {formData.email && !errors.email && (
-                      <CheckCircle size={18} className="njec-signup-input-success" />
-                    )}
-                  </div>
-                  {errors.email && (
-                    <span className="njec-signup-error-message">{errors.email}</span>
-                  )}
-                </div>
-
-                <div className="njec-signup-form-group">
-                  <label htmlFor="role" className="njec-signup-form-label">
-                    <Users size={18} />
-                    <span>Role</span>
-                  </label>
-                  <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className={`njec-signup-select ${errors.role ? 'error' : ''}`}
-                    disabled={loading || (formData.role === 'admin' && adminCount >= 2)}
-                  >
-                    <option value="">Select your role</option>
-                    {roles.map(role => (
-                      <option 
-                        key={role.value} 
-                        value={role.value}
-                        disabled={role.value === 'admin' && adminCount >= 2}
-                      >
-                        {role.label} {role.value === 'admin' && adminCount >= 2 ? '(Limit Reached)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.role && (
-                    <span className="njec-signup-error-message">{errors.role}</span>
-                  )}
-                </div>
-
-                {formData.role === 'student' && (
-                  <div className="njec-student-info-section">
-                    <h4 className="njec-student-info-title">
-                      <GraduationCap size={18} />
-                      Student Information
-                    </h4>
-                    
-                    {/* Simplified Student Info Grid - Removed Phone, Parent Name, Parent Phone */}
-                    <div className="njec-signup-form-grid">
-                      <div className="njec-signup-form-group">
-                        <label htmlFor="studentNumber" className="njec-signup-form-label">
-                          <BookOpen size={16} />
-                          <span>Student Number</span>
-                        </label>
-                        <input
-                          type="text"
-                          id="studentNumber"
-                          name="studentNumber"
-                          value={formData.studentNumber}
-                          onChange={handleChange}
-                          placeholder="Optional"
-                          className="njec-signup-input"
-                          disabled={loading}
-                        />
-                      </div>
-
-                      <div className="njec-signup-form-group">
-                        <label htmlFor="birthDate" className="njec-signup-form-label">
-                          <Calendar size={18} />
-                          <span>Birth Date</span>
-                        </label>
-                        <input
-                          type="date"
-                          id="birthDate"
-                          name="birthDate"
-                          value={formData.birthDate}
-                          onChange={handleChange}
-                          className={`njec-signup-input ${errors.birthDate ? 'error' : ''}`}
-                          disabled={loading}
-                        />
-                        {errors.birthDate && (
-                          <span className="njec-signup-error-message">{errors.birthDate}</span>
-                        )}
-                      </div>
-                    </div>
-                    {/* Subjects selection removed */}
-                  </div>
-                )}
-
-                <div className="njec-signup-form-group">
-                  <label htmlFor="password" className="njec-signup-form-label">
-                    <Lock size={18} />
-                    <span>Password</span>
-                  </label>
-                  <div className="njec-signup-input-wrapper">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      id="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      placeholder="Enter password"
-                      className={`njec-signup-input ${errors.password ? 'error' : ''}`}
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      className="njec-signup-password-toggle"
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={loading}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {formData.password && (
-                    <div className="njec-signup-password-strength">
-                      <div className="njec-signup-strength-meter">
-                        <div className={`njec-signup-strength-fill ${passwordStrength.level}`}></div>
-                      </div>
-                      <div className={`njec-signup-strength-text ${passwordStrength.level}`}>
-                        {passwordStrength.text}
-                      </div>
-                    </div>
-                  )}
-                  {errors.password && (
-                    <span className="njec-signup-error-message">{errors.password}</span>
-                  )}
-                </div>
-
-                <div className="njec-signup-form-group">
-                  <label htmlFor="confirmPassword" className="njec-signup-form-label">
-                    <Key size={18} />
-                    <span>Confirm Password</span>
-                  </label>
-                  <div className="njec-signup-input-wrapper">
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Confirm password"
-                      className={`njec-signup-input ${errors.confirmPassword ? 'error' : ''}`}
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      className="njec-signup-password-toggle"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      disabled={loading}
-                    >
-                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  {errors.confirmPassword && (
-                    <span className="njec-signup-error-message">{errors.confirmPassword}</span>
-                  )}
-                </div>
-
-                <div className="njec-signup-terms">
-                  <input
-                    type="checkbox"
-                    id="acceptTerms"
-                    name="acceptTerms"
-                    checked={formData.acceptTerms}
-                    onChange={handleChange}
-                    disabled={loading}
-                  />
-                  <label htmlFor="acceptTerms">
-                    I agree to the <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>
-                  </label>
-                </div>
-                {errors.acceptTerms && (
-                  <span className="njec-signup-error-message">{errors.acceptTerms}</span>
-                )}
-
-                <button
-                  type="submit"
-                  className="njec-signup-submit-button"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={20} className="njec-signup-spinner" />
-                      <span>Creating Account...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Create Account</span>
-                      <ArrowRight size={20} />
-                    </>
-                  )}
-                </button>
-
-                {/* Social Login and Divider Removed */}
-
-                <div className="njec-login-link-section">
-                  <User size={18} />
-                  <span>Already have an account?</span>
-                  <Link to="/login" className="njec-login-link">
-                    Sign in here
-                  </Link>
-                </div>
-              </form>
-
-              <div className="njec-signup-trust">
-                <Shield size={20} />
-                <span>Your data is securely protected</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="njec-signup-info-section">
-            <div className="njec-signup-info-card">
-              <div className="njec-signup-quote-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
-                </svg>
-              </div>
-
-              <div className="njec-signup-testimonial">
-                <h3>What our Students Say</h3>
-                <p className="njec-signup-testimonial-text">
-                  "Search and find more learning resources in one place now. 
-                  Just enroll in courses and learn at your own pace."
-                </p>
-                
-                <div className="njec-signup-testimonial-author">
-                  <div className="njec-signup-author-avatar">TT</div>
-                  <div className="njec-signup-author-info">
-                    <h4>Thabo TLou</h4>
-                    <p>UI Designer & Student</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="njec-signup-cta">
-                <h3>Get your learning journey started</h3>
-                <p>
-                  Apply now to access premium courses, expert tutors, and 
-                  comprehensive learning materials.
-                </p>
-                <button 
-                  onClick={() => navigate('/courses')}
-                  className="njec-signup-cta-button"
-                >
-                  Browse Available Courses
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-
-              <div className="njec-signup-additional-info">
-                <p>
-                  Be on the lookout for new courses and learning opportunities 
-                  to experience the easiest way to advance your education.
-                </p>
-                <div className="njec-signup-stats">
-                  <div className="njec-signup-stat">
-                    <span className="njec-signup-stat-number">500+</span>
-                    <span className="njec-signup-stat-label">Active Students</span>
-                  </div>
-                  <div className="njec-signup-stat">
-                    <span className="njec-signup-stat-number">98%</span>
-                    <span className="njec-signup-stat-label">Satisfaction Rate</span>
-                  </div>
-                  <div className="njec-signup-stat">
-                    <span className="njec-signup-stat-number">15+</span>
-                    <span className="njec-signup-stat-label">Subjects Available</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="njec-signup-info-decoration">
-              <div className="njec-signup-decoration-dot njec-signup-dot-1"></div>
-              <div className="njec-signup-decoration-dot njec-signup-dot-2"></div>
-              <div className="njec-signup-decoration-dot njec-signup-dot-3"></div>
-            </div>
-          </div>
+        <div className="signup-feature-content">
+          <h4 className="signup-feature-title">{title}</h4>
+          <p className="signup-feature-description">{description}</p>
         </div>
       </div>
+    </div>
+  );
 
-      {loading && (
-        <div className="njec-signup-loading">
-          <div className="njec-signup-loading-content">
-            <div className="njec-signup-loading-spinner"></div>
-            <h3 className="njec-signup-loading-text">Creating Your Account</h3>
-            <p className="njec-signup-loading-subtext">
-              Please wait while we set up your account...
+  // Loading Spinner
+  const LoadingSpinner = () => (
+    <div className="signup-spinner">
+      <div className="signup-spinner-dot"></div>
+      <div className="signup-spinner-dot"></div>
+      <div className="signup-spinner-dot"></div>
+    </div>
+  );
+
+  // Features data
+  const features = [
+    { icon: Shield, title: 'Secure Platform', description: '256-bit encrypted data', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+    { icon: Award, title: 'Quality Education', description: 'Certified instructors', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+    { icon: Target, title: 'Personalized Learning', description: 'Tailored study plans', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+    { icon: Zap, title: 'Quick Progress', description: 'Accelerated results', gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+    { icon: Users, title: 'Community Support', description: '24/7 student community', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
+    { icon: TrendingUp, title: 'Track Record', description: '95% success rate', gradient: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
+  ];
+
+  return (
+    <div className="signup-container">
+      {/* Animated Background */}
+      <div className="signup-bg">
+        <div className="signup-bg-shape signup-bg-shape-1"></div>
+        <div className="signup-bg-shape signup-bg-shape-2"></div>
+        <div className="signup-bg-shape signup-bg-shape-3"></div>
+        <div className="signup-bg-shape signup-bg-shape-4"></div>
+      </div>
+
+      {/* Main Content */}
+      <div className="signup-content-wrapper">
+        {/* Left Column - Features */}
+        <div className="signup-left-col">
+          <div className="signup-brand">
+            <div className="signup-logo-wrapper">
+              <img src={Logo} alt="NJEC Logo" className="signup-logo" />
+              <div className="signup-logo-text">
+                <h1 className="signup-logo-title">NJEC</h1>
+                <p className="signup-logo-subtitle">New Jerusalem Extra Classes</p>
+              </div>
+            </div>
+            <h2 className="signup-welcome-title">Welcome!</h2>
+            <p className="signup-welcome-text">
+              Join thousands of students who are already excelling with NJEC's premium education platform.
             </p>
-            <div className="njec-signup-progress-bar">
-              <div 
-                className="njec-signup-progress-fill"
-                style={{ width: `${loadingProgress}%` }}
-              ></div>
+          </div>
+
+          <div className="signup-features-grid">
+            {features.map((feature, index) => (
+              <FeatureCard
+                key={index}
+                icon={feature.icon}
+                title={feature.title}
+                description={feature.description}
+                gradient={feature.gradient}
+                delay={index * 0.1}
+              />
+            ))}
+          </div>
+
+          <div className="signup-stats">
+            <div className="signup-stat-item">
+              <span className="signup-stat-number">5000+</span>
+              <span className="signup-stat-label">Active Students</span>
+            </div>
+            <div className="signup-stat-item">
+              <span className="signup-stat-number">95%</span>
+              <span className="signup-stat-label">Success Rate</span>
+            </div>
+            <div className="signup-stat-item">
+              <span className="signup-stat-number">50+</span>
+              <span className="signup-stat-label">Expert Tutors</span>
             </div>
           </div>
         </div>
-      )}
 
-      {signupSuccess && (
-        <div className="njec-signup-success">
-          <div className="njec-signup-success-content">
-            <div className="njec-signup-success-icon">
-              <CheckCircle size={40} />
+        {/* Right Column - Sign Up Form */}
+        <div className="signup-right-col">
+          <div className="signup-form-card">
+            <div className="signup-form-header">
+              <h3 className="signup-form-title">Create Account</h3>
+              <p className="signup-form-subtitle">
+                Sign up to access the Grade 11 Registration Portal
+              </p>
             </div>
-            <h3>Account Created Successfully!</h3>
-            <p>
-              Your account has been created. {redirecting ? 
-              'Redirecting to login...' : 
-              'You will be redirected to the login page shortly.'}
-            </p>
-            {!redirecting && (
-              <div className="njec-signup-progress-bar">
-                <div className="njec-signup-progress-fill" style={{ width: '100%' }}></div>
+
+            {/* Success Message */}
+            {errors.success && (
+              <div className="signup-success-message">
+                <CheckCircle size={20} />
+                <span>{errors.success}</span>
               </div>
             )}
+
+            {!signUpMethod ? (
+              /* Initial Sign Up Options */
+              <div className="signup-options">
+                <button
+                  onClick={handleGoogleSignUp}
+                  className="signup-btn signup-btn-google"
+                  disabled={isLoading || isRedirecting}
+                >
+                  <div className="signup-btn-content">
+                    <FcGoogle size={24} />
+                    <span>Continue with Google</span>
+                  </div>
+                  {isLoading ? (
+                    <LoadingSpinner />
+                  ) : (
+                    <ChevronRight size={20} className="signup-btn-icon" />
+                  )}
+                </button>
+
+                <div className="signup-divider">
+                  <span className="signup-divider-line"></span>
+                  <span className="signup-divider-text">or</span>
+                  <span className="signup-divider-line"></span>
+                </div>
+
+                <button
+                  onClick={() => setSignUpMethod('email')}
+                  className="signup-btn signup-btn-email"
+                  disabled={isLoading || isRedirecting}
+                >
+                  <div className="signup-btn-content">
+                    <Mail size={24} />
+                    <span>Continue with Email</span>
+                  </div>
+                  <ChevronRight size={20} className="signup-btn-icon" />
+                </button>
+
+                <div className="signup-login-prompt">
+                  <p className="signup-login-text">
+                    Already have an account?{' '}
+                    <a href="/login" onClick={handleLoginClick} className="signup-login-link">
+                      Log in
+                    </a>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Email Sign Up Form */
+              <div className="signup-email-form">
+                <button
+                  onClick={() => setSignUpMethod(null)}
+                  className="signup-back-btn"
+                  disabled={isLoading}
+                >
+                  ← Back to options
+                </button>
+
+                <div className="signup-form-fields">
+                  {/* Full Name */}
+                  <div className="signup-field-group">
+                    <label className="signup-field-label">
+                      <User size={16} />
+                      Full Name
+                    </label>
+                    <div className="signup-input-wrapper">
+                      <input
+                        type="text"
+                        value={emailSignUp.fullName}
+                        onChange={(e) => setEmailSignUp(prev => ({ ...prev, fullName: e.target.value }))}
+                        className={`signup-input ${errors.fullName ? 'signup-input-error' : ''}`}
+                        placeholder="John Doe"
+                        disabled={isLoading}
+                      />
+                      {errors.fullName && (
+                        <div className="signup-field-error">
+                          <AlertCircle size={12} />
+                          <span>{errors.fullName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="signup-field-group">
+                    <label className="signup-field-label">
+                      <Mail size={16} />
+                      Email Address
+                    </label>
+                    <div className="signup-input-wrapper">
+                      <input
+                        type="email"
+                        value={emailSignUp.email}
+                        onChange={(e) => setEmailSignUp(prev => ({ ...prev, email: e.target.value }))}
+                        className={`signup-input ${errors.email ? 'signup-input-error' : ''}`}
+                        placeholder="john@example.com"
+                        disabled={isLoading}
+                      />
+                      {errors.email && (
+                        <div className="signup-field-error">
+                          <AlertCircle size={12} />
+                          <span>{errors.email}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="signup-field-group">
+                    <label className="signup-field-label">
+                      <Lock size={16} />
+                      Password
+                    </label>
+                    <div className="signup-input-wrapper">
+                      <div className="signup-password-input">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={emailSignUp.password}
+                          onChange={(e) => setEmailSignUp(prev => ({ ...prev, password: e.target.value }))}
+                          className={`signup-input ${errors.password ? 'signup-input-error' : ''}`}
+                          placeholder="Create a password"
+                          disabled={isLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="signup-password-toggle"
+                          disabled={isLoading}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {errors.password && (
+                        <div className="signup-field-error">
+                          <AlertCircle size={12} />
+                          <span>{errors.password}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="signup-password-hint">
+                      <span className={emailSignUp.password.length >= 8 ? 'valid' : ''}>
+                        ✓ Min 8 characters
+                      </span>
+                      <span className={/[A-Z]/.test(emailSignUp.password) ? 'valid' : ''}>
+                        ✓ Uppercase letter
+                      </span>
+                      <span className={/[a-z]/.test(emailSignUp.password) ? 'valid' : ''}>
+                        ✓ Lowercase letter
+                      </span>
+                      <span className={/\d/.test(emailSignUp.password) ? 'valid' : ''}>
+                        ✓ Number
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="signup-field-group">
+                    <label className="signup-field-label">
+                      <Lock size={16} />
+                      Confirm Password
+                    </label>
+                    <div className="signup-input-wrapper">
+                      <div className="signup-password-input">
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={emailSignUp.confirmPassword}
+                          onChange={(e) => setEmailSignUp(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                          className={`signup-input ${errors.confirmPassword ? 'signup-input-error' : ''}`}
+                          placeholder="Confirm your password"
+                          disabled={isLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="signup-password-toggle"
+                          disabled={isLoading}
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {errors.confirmPassword && (
+                        <div className="signup-field-error">
+                          <AlertCircle size={12} />
+                          <span>{errors.confirmPassword}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Terms Agreement */}
+                  <div className="signup-terms-group">
+                    <label className="signup-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={emailSignUp.agreeToTerms}
+                        onChange={(e) => setEmailSignUp(prev => ({ ...prev, agreeToTerms: e.target.checked }))}
+                        className="signup-checkbox"
+                        disabled={isLoading}
+                      />
+                      <span className="signup-checkbox-custom"></span>
+                      <span className="signup-checkbox-text">
+                        I agree to the{' '}
+                        <a href="/terms" className="signup-link">Terms of Service</a>
+                        {' '}and{' '}
+                        <a href="/privacy" className="signup-link">Privacy Policy</a>
+                      </span>
+                    </label>
+                    {errors.agreeToTerms && (
+                      <div className="signup-field-error">
+                        <AlertCircle size={12} />
+                        <span>{errors.agreeToTerms}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={handleEmailSignUp}
+                    className="signup-btn signup-btn-submit"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <LoadingSpinner />
+                    ) : (
+                      <>
+                        <span>Create Account</span>
+                        <ArrowRight size={20} />
+                      </>
+                    )}
+                  </button>
+
+                  {/* Login link for email form */}
+                  <div className="signup-email-login-prompt">
+                    <p className="signup-login-text">
+                      Already have an account?{' '}
+                      <a href="/login" onClick={handleLoginClick} className="signup-login-link">
+                        Sign in
+                      </a>
+                    </p>
+                  </div>
+                </div>
+
+                {/* General Error */}
+                {errors.general && (
+                  <div className="signup-error-general">
+                    <AlertCircle size={16} />
+                    <span>{errors.general}</span>
+                  </div>
+                )}
+
+                {/* Existing User Suggestion */}
+                {errors.existingUser && (
+                  <div className="signup-existing-user">
+                    <p>
+                      <a href="/login" onClick={handleLoginClick} className="signup-login-link">
+                        Click here to log in
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Trust Badges */}
+            <div className="signup-trust-badges">
+              <div className="signup-trust-item">
+                <Shield size={14} />
+                <span>256-bit Encryption</span>
+              </div>
+              <div className="signup-trust-item">
+                <CheckCircle size={14} />
+                <span>GDPR Compliant</span>
+              </div>
+              <div className="signup-trust-item">
+                <Sparkles size={14} />
+                <span>Secure Platform</span>
+              </div>
+            </div>
           </div>
+
+          {/* Help Text */}
+          <p className="signup-help-text">
+            By signing up, you agree to receive important updates about your registration.
+            You can unsubscribe at any time.
+          </p>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 };
 
-export default Signup;
+export default SignUp;
