@@ -7,7 +7,6 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
-import Signup from './components/Signup';
 import MultiStageRegistration from './components/MultiStageRegistration';
 import './App.css';
 
@@ -33,7 +32,6 @@ function App() {
         {/* Public Routes */}
         <Route path="/ss" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
-        { <Route path="/signup" element={<Signup />} /> }
         <Route path="/s" element={<StudentRegistration />} />
         <Route path="/" element={<MultiStageRegistration />} />
 
