@@ -380,6 +380,8 @@
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+  /* Problem 1 Fix: Added -webkit prefix for Safari/iOS */
+  -webkit-user-select: none;
   user-select: none;
   padding: 0.5rem;
   border-radius: 8px;
@@ -657,6 +659,8 @@
   background: rgba(255, 255, 255, 0.1);
   padding: 2rem;
   border-radius: 16px;
+  /* Problem 2 Fix: Added -webkit prefix for Safari/iOS */
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }
 
@@ -756,6 +760,8 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  /* Problem 3 Fix: Added -webkit prefix for Safari/iOS */
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -818,6 +824,8 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  /* Problem 4 Fix: Added -webkit prefix for Safari/iOS */
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 

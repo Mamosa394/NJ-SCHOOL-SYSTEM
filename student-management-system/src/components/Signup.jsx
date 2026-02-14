@@ -8,14 +8,14 @@ import {
   EyeOff,
   Shield,
   User,
-  Phone,
+  // Phone, // Removed as per request
   Calendar,
   BookOpen,
   Users,
   Key,
   CheckCircle,
   Loader2,
-  AlertCircle,
+  // AlertCircle, // Unused
   ArrowLeft,
   GraduationCap,
   ChevronRight
@@ -29,15 +29,15 @@ const Signup = () => {
   const [formData, setFormData] = useState({
     fullName: '',
     studentNumber: '',
-    phone: '',
+    // phone: '', // Removed
     email: '',
     password: '',
     confirmPassword: '',
     role: '',
-    parentName: '',
-    parentPhone: '',
+    // parentName: '', // Removed
+    // parentPhone: '', // Removed
     birthDate: '',
-    subjects: [],
+    // subjects: [], // Removed
     acceptTerms: false
   });
 
@@ -51,10 +51,7 @@ const Signup = () => {
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
-  const subjectsList = [
-    "Mathematics", "Biology", "Physics", "Chemistry",
-    "Physical Science", "Accounting", "English", "Sesotho"
-  ];
+  // Removed subjectsList array
 
   const roles = [
     { value: 'student', label: 'Student' },
@@ -111,14 +108,7 @@ const Signup = () => {
     }
   };
 
-  const handleSubjectToggle = (subject) => {
-    setFormData(prev => {
-      const subjects = prev.subjects.includes(subject)
-        ? prev.subjects.filter(s => s !== subject)
-        : [...prev.subjects, subject];
-      return { ...prev, subjects };
-    });
-  };
+  // Removed handleSubjectToggle function
 
   const validateForm = () => {
     const newErrors = {};
@@ -152,11 +142,8 @@ const Signup = () => {
     }
     
     if (formData.role === 'student') {
-      if (!formData.phone) newErrors.phone = 'Phone number is required';
-      if (!formData.parentName) newErrors.parentName = 'Parent name is required';
-      if (!formData.parentPhone) newErrors.parentPhone = 'Parent phone is required';
+      // Removed checks for phone, parent details, and subjects
       if (!formData.birthDate) newErrors.birthDate = 'Birth date is required';
-      if (formData.subjects.length === 0) newErrors.subjects = 'Please select at least one subject';
     }
     
     setErrors(newErrors);
@@ -190,11 +177,11 @@ const Signup = () => {
             full_name: formData.fullName,
             student_number: formData.studentNumber,
             email: formData.email,
-            phone: formData.phone,
+            // phone: formData.phone, // Removed
             birth_date: formData.birthDate,
-            parent_name: formData.parentName,
-            parent_phone: formData.parentPhone,
-            subjects: formData.subjects,
+            // parent_name: formData.parentName, // Removed
+            // parent_phone: formData.parentPhone, // Removed
+            // subjects: formData.subjects, // Removed
             enrollment_status: 'active'
           }]);
 
@@ -219,9 +206,7 @@ const Signup = () => {
     }
   };
 
-  const handleSocialSignup = (provider) => {
-    console.log(`Signing up with ${provider}`);
-  };
+  // Removed handleSocialSignup function
 
   return (
     <>
@@ -347,27 +332,8 @@ const Signup = () => {
                       Student Information
                     </h4>
                     
+                    {/* Simplified Student Info Grid - Removed Phone, Parent Name, Parent Phone */}
                     <div className="njec-signup-form-grid">
-                      <div className="njec-signup-form-group">
-                        <label htmlFor="phone" className="njec-signup-form-label">
-                          <Phone size={16} />
-                          <span>Phone Number</span>
-                        </label>
-                        <input
-                          type="tel"
-                          id="phone"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          placeholder="+27 12 345 6789"
-                          className={`njec-signup-input ${errors.phone ? 'error' : ''}`}
-                          disabled={loading}
-                        />
-                        {errors.phone && (
-                          <span className="njec-signup-error-message">{errors.phone}</span>
-                        )}
-                      </div>
-
                       <div className="njec-signup-form-group">
                         <label htmlFor="studentNumber" className="njec-signup-form-label">
                           <BookOpen size={16} />
@@ -384,91 +350,27 @@ const Signup = () => {
                           disabled={loading}
                         />
                       </div>
-                    </div>
-
-                    <div className="njec-signup-form-grid">
-                      <div className="njec-signup-form-group">
-                        <label htmlFor="parentName" className="njec-signup-form-label">
-                          <User size={16} />
-                          <span>Parent/Guardian Name</span>
-                        </label>
-                        <input
-                          type="text"
-                          id="parentName"
-                          name="parentName"
-                          value={formData.parentName}
-                          onChange={handleChange}
-                          placeholder="Parent/guardian full name"
-                          className={`njec-signup-input ${errors.parentName ? 'error' : ''}`}
-                          disabled={loading}
-                        />
-                        {errors.parentName && (
-                          <span className="njec-signup-error-message">{errors.parentName}</span>
-                        )}
-                      </div>
 
                       <div className="njec-signup-form-group">
-                        <label htmlFor="parentPhone" className="njec-signup-form-label">
-                          <Phone size={16} />
-                          <span>Parent/Guardian Phone</span>
+                        <label htmlFor="birthDate" className="njec-signup-form-label">
+                          <Calendar size={18} />
+                          <span>Birth Date</span>
                         </label>
                         <input
-                          type="tel"
-                          id="parentPhone"
-                          name="parentPhone"
-                          value={formData.parentPhone}
+                          type="date"
+                          id="birthDate"
+                          name="birthDate"
+                          value={formData.birthDate}
                           onChange={handleChange}
-                          placeholder="+27 12 345 6789"
-                          className={`njec-signup-input ${errors.parentPhone ? 'error' : ''}`}
+                          className={`njec-signup-input ${errors.birthDate ? 'error' : ''}`}
                           disabled={loading}
                         />
-                        {errors.parentPhone && (
-                          <span className="njec-signup-error-message">{errors.parentPhone}</span>
+                        {errors.birthDate && (
+                          <span className="njec-signup-error-message">{errors.birthDate}</span>
                         )}
                       </div>
                     </div>
-
-                    <div className="njec-signup-form-group">
-                      <label htmlFor="birthDate" className="njec-signup-form-label">
-                        <Calendar size={18} />
-                        <span>Birth Date</span>
-                      </label>
-                      <input
-                        type="date"
-                        id="birthDate"
-                        name="birthDate"
-                        value={formData.birthDate}
-                        onChange={handleChange}
-                        className={`njec-signup-input ${errors.birthDate ? 'error' : ''}`}
-                        disabled={loading}
-                      />
-                      {errors.birthDate && (
-                        <span className="njec-signup-error-message">{errors.birthDate}</span>
-                      )}
-                    </div>
-
-                    <div className="njec-signup-form-group">
-                      <label className="njec-signup-form-label">
-                        <BookOpen size={18} />
-                        <span>Select Subjects</span>
-                      </label>
-                      <div className="njec-subjects-grid">
-                        {subjectsList.map(subject => (
-                          <label key={subject} className="njec-subject-checkbox">
-                            <input
-                              type="checkbox"
-                              checked={formData.subjects.includes(subject)}
-                              onChange={() => handleSubjectToggle(subject)}
-                              disabled={loading}
-                            />
-                            <span>{subject}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {errors.subjects && (
-                        <span className="njec-signup-error-message">{errors.subjects}</span>
-                      )}
-                    </div>
+                    {/* Subjects selection removed */}
                   </div>
                 )}
 
@@ -577,30 +479,7 @@ const Signup = () => {
                   )}
                 </button>
 
-                <div className="njec-signup-divider">
-                  <span>Or continue with</span>
-                </div>
-
-                <div className="njec-signup-social">
-                  <button
-                    type="button"
-                    onClick={() => handleSocialSignup('google')}
-                    className="njec-signup-social-button google"
-                    disabled={loading}
-                  >
-                    <img src="https://www.google.com/favicon.ico" alt="Google" />
-                    Google
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSocialSignup('microsoft')}
-                    className="njec-signup-social-button microsoft"
-                    disabled={loading}
-                  >
-                    <img src="https://www.microsoft.com/favicon.ico" alt="Microsoft" />
-                    Microsoft
-                  </button>
-                </div>
+                {/* Social Login and Divider Removed */}
 
                 <div className="njec-login-link-section">
                   <User size={18} />
