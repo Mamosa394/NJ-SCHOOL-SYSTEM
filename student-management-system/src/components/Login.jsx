@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Mail, 
@@ -10,8 +10,11 @@ import {
   UserPlus,
   Key,
   CheckCircle,
-  Users // Added for role icon
+  Users,
+  AlertCircle
 } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
+import { supabase } from './supabaseClient';
 import '../styles/login.css';
 import Logo from "../assets/Logo.jpg"
 
@@ -20,12 +23,126 @@ const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    role: '' // ADDED: Role state
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Listen for auth changes (Google OAuth)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event);
+      
+      if (event === 'SIGNED_IN' && session && !isRedirecting) {
+        setIsRedirecting(true);
+        await handleSuccessfulAuth(session.user);
+      }
+    });
+
+    // Check for existing session
+    checkExistingSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const checkExistingSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user && !isRedirecting) {
+        setIsRedirecting(true);
+        await handleSuccessfulAuth(session.user);
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+    }
+  };
+
+  const navigateBasedOnRole = (role) => {
+    const routes = {
+      admin: '/admin/dashboard',
+      teacher: '/teacher/dashboard',
+      student: '/student/dashboard',
+      parent: '/parent/dashboard'
+    };
+    
+    const redirectPath = routes[role] || '/student/dashboard';
+    
+    setTimeout(() => {
+      navigate(redirectPath, { replace: true });
+    }, 100);
+  };
+
+  const handleSuccessfulAuth = async (user) => {
+    try {
+      // Fetch user profile with role from Supabase
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        // If no profile exists, create a basic one and redirect to role selection
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+            avatar_url: user.user_metadata?.avatar_url || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (!insertError) {
+          navigate('/select-role', { 
+            state: { 
+              userId: user.id,
+              email: user.email,
+              fullName: user.user_metadata?.full_name || ''
+            },
+            replace: true 
+          });
+          return;
+        }
+      }
+
+      if (profile && profile.role) {
+        // User has a role - redirect to respective dashboard
+        const userData = {
+          id: user.id,
+          email: user.email,
+          role: profile.role,
+          fullName: profile.full_name || user.user_metadata?.full_name || '',
+          avatar_url: profile.avatar_url || user.user_metadata?.avatar_url || ''
+        };
+
+        localStorage.setItem('user', JSON.stringify(userData));
+        navigateBasedOnRole(profile.role);
+      } else {
+        // User exists but no role selected yet
+        navigate('/select-role', { 
+          state: { 
+            userId: user.id,
+            email: user.email,
+            fullName: profile?.full_name || user.user_metadata?.full_name || ''
+          },
+          replace: true 
+        });
+      }
+    } catch (error) {
+      console.error('Error in successful auth:', error);
+      setErrors({ 
+        server: 'Error processing authentication. Please try again.' 
+      });
+      setIsRedirecting(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -33,7 +150,6 @@ const Login = () => {
       ...prev,
       [name]: value
     }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -56,67 +172,75 @@ const Login = () => {
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-
-    // ADDED: Role validation
-    if (!formData.role) {
-      newErrors.role = 'Please select a role';
-    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  // Email/Password Login
+  const handleEmailLogin = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
     
     setLoading(true);
+    setErrors({});
     
     try {
-      // ✅ ACTUAL API CALL (Update URL to your backend)
-      const response = await fetch('http://localhost:5000/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setLoading(false);
-        // ✅ Store user in localStorage for ProtectedRoute
-        localStorage.setItem('user', JSON.stringify(data));
-
-        // ✅ Route based on chosen role
-        const routes = {
-          admin: '/admin',
-          teacher: '/teacher',
-          student: '/student',
-          parent: '/parent'
-        };
-        navigate(routes[data.role]);
-      } else {
-        setLoading(false);
-        setErrors({ server: data.message });
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password');
+        }
+        throw error;
       }
-    } catch (err) {
-      console.error("Login Error:", err);
+
+      if (data.user) {
+        await handleSuccessfulAuth(data.user);
+      }
+    } catch (error) {
+      console.error("Login Error:", error);
+      setErrors({ server: error.message });
       setLoading(false);
-      setErrors({ server: "Server connection failed." });
+    }
+  };
+
+  // Google Login
+  const handleGoogleLogin = async () => {
+    if (loading || isRedirecting) return;
+    
+    setLoading(true);
+    setErrors({});
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/login`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+
+      if (error) throw error;
+      
+      // OAuth redirect will happen automatically
+      
+    } catch (error) {
+      console.error('Google login error:', error);
+      setErrors({ server: error.message || 'Failed to login with Google' });
+      setLoading(false);
     }
   };
 
   const handleForgotPassword = () => {
-    // Navigate to forgot password page
     navigate('/forgot-password');
-  };
-
-  const handleSocialLogin = (provider) => {
-    console.log(`Logging in with ${provider}`);
-    // Implement social login logic
   };
 
   return (
@@ -131,7 +255,6 @@ const Login = () => {
       <div className="njec-login-wrapper">
         {/* Left Side - Login Form */}
         <div className="njec-login-form-section">
-          {/* Back Button */}
           <button 
             onClick={() => navigate('/')}
             className="njec-back-button"
@@ -139,11 +262,10 @@ const Login = () => {
             ← Back to Home
           </button>
 
-          {/* Logo/Brand */}
           <div className="njec-login-header">
             <div className="njec-login-logo">
               <div className="njec-login-logo-icon">
-                <img src= {Logo} className="njec-login-logo-icon" alt="Logo"/>
+                <img src={Logo} className="njec-login-logo-icon" alt="Logo"/>
               </div>
               <div className="njec-login-brand">
                 <h1>NJEC</h1>
@@ -152,45 +274,20 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Form Container */}
           <div className="njec-form-container">
             <div className="njec-form-header">
               <h2>Welcome back</h2>
-              <p>Please enter your Account details</p>
+              <p>Please enter your account details</p>
             </div>
 
-            {/* ADDED: Server Error Display */}
-            {errors.server && <p style={{color: 'red', textAlign: 'center', marginBottom: '10px'}}>{errors.server}</p>}
-
-            <form onSubmit={handleSubmit} className="njec-login-form">
-              
-              {/* ADDED: Role Field */}
-              <div className="njec-form-group">
-                <label htmlFor="role" className="njec-form-label">
-                  <Users size={18} />
-                  <span>Select Role</span>
-                </label>
-                <div className="njec-input-wrapper">
-                  <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className={`njec-input ${errors.role ? 'error' : ''}`}
-                    disabled={loading}
-                  >
-                    <option value="">Select your role...</option>
-                    <option value="admin">Admin</option>
-                    <option value="teacher">Teacher</option>
-                    <option value="student">Student</option>
-                    <option value="parent">Parent</option>
-                  </select>
-                </div>
-                {errors.role && (
-                  <span className="njec-error-message">{errors.role}</span>
-                )}
+            {errors.server && (
+              <div className="njec-error-banner">
+                <AlertCircle size={18} />
+                <span>{errors.server}</span>
               </div>
+            )}
 
+            <form onSubmit={handleEmailLogin} className="njec-login-form">
               {/* Email Field */}
               <div className="njec-form-group">
                 <label htmlFor="email" className="njec-form-label">
@@ -297,21 +394,12 @@ const Login = () => {
               <div className="njec-social-login">
                 <button
                   type="button"
-                  onClick={() => handleSocialLogin('google')}
+                  onClick={handleGoogleLogin}
                   className="njec-social-button google"
-                  disabled={loading}
+                  disabled={loading || isRedirecting}
                 >
-                  <img src="https://www.google.com/favicon.ico" alt="Google" />
+                  <FcGoogle size={20} />
                   Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSocialLogin('microsoft')}
-                  className="njec-social-button microsoft"
-                  disabled={loading}
-                >
-                  <img src="https://www.microsoft.com/favicon.ico" alt="Microsoft" />
-                  Microsoft
                 </button>
               </div>
 
@@ -325,7 +413,6 @@ const Login = () => {
               </div>
             </form>
 
-            {/* Trust Badge */}
             <div className="njec-login-trust">
               <Shield size={20} />
               <span>Your data is securely protected</span>
@@ -333,7 +420,7 @@ const Login = () => {
           </div>
         </div>
 
-        {/* Right Side - Testimonial/Info */}
+        {/* Right Side - Info */}
         <div className="njec-login-info-section">
           <div className="njec-info-card">
             <div className="njec-quote-icon">
