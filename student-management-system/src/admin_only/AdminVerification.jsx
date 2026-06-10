@@ -11,7 +11,7 @@ import {
   MessageSquare, ThumbsUp, ThumbsDown,
   Loader, Bell, UserCheck, UserX
 } from 'lucide-react';
-import { supabase } from '../components/supabaseClient';
+import { supabase } from '../../src/components/supabaseClient';
 import '../styles/adminStyles/AdminVerification.css';
 
 const AdminVerification = () => {

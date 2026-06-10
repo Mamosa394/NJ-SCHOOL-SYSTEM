@@ -6,12 +6,12 @@ import '../styles/MultiStageRegistration.css';
 import Logo from '../assets/Logo.jpg';
 import { 
   User, BookOpen, CreditCard, CheckCircle, ChevronRight, 
-  ArrowLeft, Loader, Shield, GraduationCap, DollarSign,
+  ArrowLeft, Loader, Shield, GraduationCap,
   Upload, Camera, Phone, Wallet, Check, X, AlertCircle,
   Info, Calendar, Hash, Mail, PhoneCall, FileCheck, Lock,
   Sparkles, Clock, Award, Target, Zap, Users, TrendingUp,
-  Home, Settings, HelpCircle, Bell, Star, Award as Trophy,
-  Target as Goal, Users as People, TrendingUp as ChartUp
+  Home, Settings, HelpCircle, Bell, Star,
+  Goal, UserPlus
 } from 'lucide-react';
 
 const MultiStageRegistration = () => {
@@ -24,18 +24,20 @@ const MultiStageRegistration = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // Subject data with prices in Maloti (M)
+  // All subjects treated equally - no categories
   const subjects = [
-    { id: 'math', name: 'Mathematics', price: 450, description: 'Core mathematics curriculum', icon: '∫', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { id: 'physics', name: 'Physical Science', price: 500, description: 'Physics & Chemistry combined', icon: '⚛', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { id: 'sesotho', name: 'Sesotho', price: 350, description: 'Language & literature studies', icon: '📖', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-    { id: 'english', name: 'English', price: 400, description: 'English language mastery', icon: '🅰', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
-    { id: 'economics', name: 'Economics', price: 480, description: 'Principles of economics', icon: '📈', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-    { id: 'accounts', name: 'Accounts', price: 520, description: 'Accounting principles', icon: '💰', color: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
-    { id: 'biology', name: 'Biology', price: 470, description: 'Biological sciences', icon: '🧬', color: 'linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)' },
-    { id: 'computers', name: 'Computer Studies', price: 490, description: 'Computer literacy & programming', icon: '💻', color: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
-    { id: 'geography', name: 'Geography', price: 430, description: 'Earth sciences & mapping', icon: '🗺', color: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' },
+    { id: 'math_core', name: 'Mathematics Core', price: 180, description: 'Standard mathematics curriculum', icon: '∫', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+    { id: 'math_extended', name: 'Mathematics Extended', price: 180, description: 'Advanced mathematics curriculum', icon: '∑', color: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)' },
+    { id: 'physics', name: 'Physics', price: 180, description: 'Physics principles & mechanics', icon: '⚡', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+    { id: 'chemistry', name: 'Chemistry', price: 180, description: 'Chemical reactions & elements', icon: '🧪', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+    { id: 'physical_science', name: 'Physical Science', price: 360, description: 'Physics & Chemistry combined', icon: '⚛', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
+    { id: 'sesotho', name: 'Sesotho', price: 180, description: 'Language & literature studies', icon: '📖', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+    { id: 'english', name: 'English', price: 180, description: 'English language mastery', icon: '🅰', color: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
+    { id: 'accounting', name: 'Accounting', price: 180, description: 'Accounting principles', icon: '💰', color: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' },
+    { id: 'biology', name: 'Biology', price: 180, description: 'Biological sciences', icon: '🧬', color: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
   ];
 
   // Stage 1: Student Information
@@ -49,7 +51,7 @@ const MultiStageRegistration = () => {
     class_type: 'extra',
   });
 
-  // Stage 2: Subject Selection
+  // Stage 2: Subject Selection - all treated equally
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   
   // Stage 3: Payment Information
@@ -70,14 +72,12 @@ const MultiStageRegistration = () => {
     const getUser = async () => {
       setIsAuthLoading(true);
       try {
-        // Get current session and user
         const { data: { session } } = await supabase.auth.getSession();
         const { data: { user } } = await supabase.auth.getUser();
         
         setSession(session);
         setUser(user);
         
-        // If no user, redirect to signup
         if (!user) {
           console.log('No user found, redirecting to signup');
           navigate('/signup');
@@ -86,7 +86,6 @@ const MultiStageRegistration = () => {
 
         console.log('User authenticated:', user.email);
 
-        // Pre-fill email from auth user
         setStudentInfo(prev => ({
           ...prev,
           email: user.email || '',
@@ -95,7 +94,6 @@ const MultiStageRegistration = () => {
                      prev.full_name
         }));
 
-        // Also check location state (from signup)
         if (location.state) {
           const { userEmail, userName } = location.state;
           setStudentInfo(prev => ({
@@ -115,7 +113,6 @@ const MultiStageRegistration = () => {
 
     getUser();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -154,7 +151,7 @@ const MultiStageRegistration = () => {
     }
   };
 
-  // Handle subject selection
+  // Handle subject selection - simple toggle for all subjects
   const toggleSubject = (subjectId) => {
     setSelectedSubjects(prev => {
       if (prev.includes(subjectId)) {
@@ -174,8 +171,8 @@ const MultiStageRegistration = () => {
     }));
   };
 
-  // Handle screenshot upload
-  const handleScreenshotUpload = (e) => {
+  // Handle screenshot upload with loading and success feedback
+  const handleScreenshotUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -187,13 +184,34 @@ const MultiStageRegistration = () => {
         return;
       }
 
+      setIsUploading(true);
+      setStageErrors(prev => ({ ...prev, screenshot: '' }));
+      
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
       setPaymentInfo(prev => ({
         ...prev,
         screenshot: file,
         screenshotPreview: URL.createObjectURL(file)
       }));
-      setStageErrors(prev => ({ ...prev, screenshot: '' }));
+      
+      setIsUploading(false);
+      setUploadSuccess(true);
+      
+      setTimeout(() => {
+        setUploadSuccess(false);
+      }, 3000);
     }
+  };
+
+  // Handle removing screenshot
+  const handleRemoveScreenshot = () => {
+    setPaymentInfo(prev => ({
+      ...prev,
+      screenshot: null,
+      screenshotPreview: null
+    }));
+    setUploadSuccess(false);
   };
 
   // Validate current stage
@@ -207,7 +225,6 @@ const MultiStageRegistration = () => {
       if (studentInfo.student_number && !/^\d{9}$/.test(studentInfo.student_number)) {
         newErrors.student_number = 'Student number must be 9 digits';
       }
-      // Additional validation for student number (not all zeros, not 123456789)
       if (studentInfo.student_number === '000000000' || studentInfo.student_number === '123456789') {
         newErrors.student_number = 'Invalid student number';
       }
@@ -249,109 +266,102 @@ const MultiStageRegistration = () => {
     }
   };
 
-  // ==================== UPDATED HANDLE FINAL SUBMIT ====================
-// Final submission - UPDATED
-const handleFinalSubmit = async () => {
-  setIsLoading(true);
-  setStageErrors({});
-  
-  try {
-    // Check if user is authenticated
-    if (!user || !session) {
-      setStageErrors(prev => ({ 
-        ...prev, 
-        submission: 'You must be logged in to register. Redirecting to signup...' 
-      }));
-      setTimeout(() => navigate('/signup'), 2000);
-      return;
-    }
-
-    console.log('📝 Starting registration process...');
-    console.log('User:', user.email);
-
-    // Create FormData for multipart upload
-    const formData = new FormData();
+  // Final submission
+  const handleFinalSubmit = async () => {
+    setIsLoading(true);
+    setStageErrors({});
     
-    // Prepare all registration data
-    const registrationData = {
-      full_name: studentInfo.full_name,
-      student_number: studentInfo.student_number,
-      email: studentInfo.email,
-      phone: studentInfo.phone,
-      birth_date: studentInfo.birth_date,
-      gender: studentInfo.gender,
-      grade_level: 'Grade 11',
-      class_type: studentInfo.class_type,
-      subjects: selectedSubjects,
-      payment_method: paymentInfo.payment_method,
-      payment_number: paymentInfo.payment_number,
-      payer_name: paymentInfo.payer_name
-    };
-
-    // Add the data as a JSON string
-    formData.append('data', JSON.stringify(registrationData));
-    
-    // Add payment screenshot if exists
-    if (paymentInfo.screenshot) {
-      formData.append('paymentProof', paymentInfo.screenshot);
-      console.log('📸 Payment screenshot attached');
-    }
-
-    console.log('📡 Sending to backend...');
-
-    // Try the complete-registration endpoint first (handles both student and payment)
-    const response = await axios.post(
-      'http://localhost:5000/api/complete-registration',
-      formData,
-      {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'multipart/form-data'
-        },
-        timeout: 30000
+    try {
+      if (!user || !session) {
+        setStageErrors(prev => ({ 
+          ...prev, 
+          submission: 'You must be logged in to register. Redirecting to signup...' 
+        }));
+        setTimeout(() => navigate('/signup'), 2000);
+        return;
       }
-    );
 
-    console.log('✅ Registration successful!');
-    console.log('Response:', response.data);
+      console.log('📝 Starting registration process...');
+      console.log('User:', user.email);
 
-    setShowSuccess(true);
+      const formData = new FormData();
+      
+      const registrationData = {
+        full_name: studentInfo.full_name,
+        student_number: studentInfo.student_number,
+        email: studentInfo.email,
+        phone: studentInfo.phone,
+        birth_date: studentInfo.birth_date,
+        gender: studentInfo.gender,
+        grade_level: 'Grade 11',
+        class_type: studentInfo.class_type,
+        subjects: selectedSubjects,
+        payment_method: paymentInfo.payment_method,
+        payment_number: paymentInfo.payment_number,
+        payer_name: paymentInfo.payer_name
+      };
 
-  } catch (error) {
-    console.error('❌ Registration error details:', {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      config: {
-        url: error.config?.url,
-        method: error.config?.method
+      formData.append('data', JSON.stringify(registrationData));
+      
+      if (paymentInfo.screenshot) {
+        formData.append('paymentProof', paymentInfo.screenshot);
+        console.log('📸 Payment screenshot attached');
       }
-    });
-    
-    if (error.response) {
-      // Show specific error message from backend
-      const errorMsg = error.response.data?.error || 
-                      error.response.data?.message || 
-                      'Registration failed';
-      setStageErrors(prev => ({ 
-        ...prev, 
-        submission: errorMsg 
-      }));
-    } else if (error.request) {
-      setStageErrors(prev => ({ 
-        ...prev, 
-        submission: 'No response from server. Please check your connection.' 
-      }));
-    } else {
-      setStageErrors(prev => ({ 
-        ...prev, 
-        submission: error.message || 'Registration failed' 
-      }));
+
+      console.log('📡 Sending to backend...');
+
+      const response = await axios.post(
+        'http://localhost:5000/api/complete-registration',
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 30000
+        }
+      );
+
+      console.log('✅ Registration successful!');
+      console.log('Response:', response.data);
+
+      setShowSuccess(true);
+
+    } catch (error) {
+      console.error('❌ Registration error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method
+        }
+      });
+      
+      if (error.response) {
+        const errorMsg = error.response.data?.error || 
+                        error.response.data?.message || 
+                        'Registration failed';
+        setStageErrors(prev => ({ 
+          ...prev, 
+          submission: errorMsg 
+        }));
+      } else if (error.request) {
+        setStageErrors(prev => ({ 
+          ...prev, 
+          submission: 'No response from server. Please check your connection.' 
+        }));
+      } else {
+        setStageErrors(prev => ({ 
+          ...prev, 
+          submission: error.message || 'Registration failed' 
+        }));
+      }
+    } finally {
+      setIsLoading(false);
     }
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
+
   // Show loading while checking auth
   if (isAuthLoading) {
     return (
@@ -413,6 +423,42 @@ const handleFinalSubmit = async () => {
     </div>
   );
 
+  // Subject Card Component
+  const SubjectCard = ({ subject, isSelected, onSelect }) => (
+    <div 
+      className={`njec-subject-card ${isSelected ? 'njec-subject-selected' : ''}`}
+      onClick={() => onSelect(subject.id)}
+      style={{ animationDelay: '0.05s' }}
+    >
+      <div className="njec-subject-card-content">
+        <div className="njec-subject-icon" style={{ background: subject.color }}>
+          <span className="njec-subject-icon-text">{subject.icon}</span>
+        </div>
+        <div className="njec-subject-info">
+          <div className="njec-subject-header">
+            <h4 className="njec-subject-name">{subject.name}</h4>
+            <div className="njec-subject-checkbox">
+              {isSelected ? (
+                <CheckCircle size={18} className="njec-check-icon" />
+              ) : (
+                <div className="njec-checkbox-empty"></div>
+              )}
+            </div>
+          </div>
+          <p className="njec-subject-description">{subject.description}</p>
+          <div className="njec-subject-footer">
+            <div className="njec-subject-price">
+              <span>M{subject.price.toLocaleString()}</span>
+            </div>
+            <div className="njec-subject-badge">
+              {subject.price >= 360 ? 'Premium' : 'Standard'}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   // Render stage 1: Student Information
   const renderStage1 = () => (
     <div className="njec-stage-content">
@@ -427,7 +473,6 @@ const handleFinalSubmit = async () => {
         </div>
       </div>
 
-      {/* 2x2 Grid for Form Inputs */}
       <div className="njec-form-grid-2x2">
         <div className="njec-form-row">
           <div className="njec-form-group">
@@ -492,7 +537,7 @@ const handleFinalSubmit = async () => {
                 onChange={handleStudentInfoChange}
                 className={`njec-form-input ${errors.email ? 'njec-input-error' : ''}`}
                 placeholder="student@example.com"
-                readOnly // Email comes from auth, shouldn't be changed
+                readOnly
               />
               {errors.email && (
                 <div className="njec-error-message">
@@ -569,7 +614,6 @@ const handleFinalSubmit = async () => {
         </div>
       </div>
 
-      {/* Full-width radio group */}
       <div className="njec-form-group njec-full-width">
         <label className="njec-form-label">
           <GraduationCap size={18} />
@@ -611,7 +655,7 @@ const handleFinalSubmit = async () => {
     </div>
   );
 
-  // Render stage 2: Subject Selection
+  // Render stage 2: Subject Selection - All treated equally
   const renderStage2 = () => (
     <div className="njec-stage-content">
       <div className="njec-stage-header">
@@ -620,7 +664,7 @@ const handleFinalSubmit = async () => {
         </div>
         <div className="njec-stage-header-text">
           <h3 className="njec-stage-title">Subject Selection</h3>
-          <p className="njec-stage-subtitle">Choose your Grade 11 subjects. Select at least one to continue</p>
+          <p className="njec-stage-subtitle">Choose your subjects. Select at least one to continue. All subjects are M180 except Physical Science (M360)</p>
         </div>
       </div>
 
@@ -631,43 +675,15 @@ const handleFinalSubmit = async () => {
         </div>
       )}
 
-      {/* 3x3 Grid for Subjects */}
+      {/* All subjects in one grid - treated equally */}
       <div className="njec-subjects-grid-3x3">
         {subjects.map((subject, index) => (
-          <div 
+          <SubjectCard
             key={subject.id}
-            className={`njec-subject-card ${selectedSubjects.includes(subject.id) ? 'njec-subject-selected' : ''}`}
-            onClick={() => toggleSubject(subject.id)}
-            style={{ animationDelay: `${index * 0.05}s` }}
-          >
-            <div className="njec-subject-card-content">
-              <div className="njec-subject-icon" style={{ background: subject.color }}>
-                <span className="njec-subject-icon-text">{subject.icon}</span>
-              </div>
-              <div className="njec-subject-info">
-                <div className="njec-subject-header">
-                  <h4 className="njec-subject-name">{subject.name}</h4>
-                  <div className="njec-subject-checkbox">
-                    {selectedSubjects.includes(subject.id) ? (
-                      <CheckCircle size={20} className="njec-check-icon" />
-                    ) : (
-                      <div className="njec-checkbox-empty"></div>
-                    )}
-                  </div>
-                </div>
-                <p className="njec-subject-description">{subject.description}</p>
-                <div className="njec-subject-footer">
-                  <div className="njec-subject-price">
-                    <DollarSign size={16} />
-                    <span>M {subject.price.toLocaleString()}</span>
-                  </div>
-                  <div className="njec-subject-badge">
-                    {subject.price <= 400 ? 'Standard' : subject.price <= 480 ? 'Enhanced' : 'Premium'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            subject={subject}
+            isSelected={selectedSubjects.includes(subject.id)}
+            onSelect={toggleSubject}
+          />
         ))}
       </div>
 
@@ -686,7 +702,7 @@ const handleFinalSubmit = async () => {
           </div>
           <div className="njec-summary-item">
             <span className="njec-summary-label">Total Amount</span>
-            <span className="njec-summary-value njec-total-amount">M {calculateTotal().toLocaleString()}</span>
+            <span className="njec-summary-value njec-total-amount">M{calculateTotal().toLocaleString()}</span>
           </div>
           <div className="njec-summary-footer">
             <div className="njec-summary-note">
@@ -769,7 +785,6 @@ const handleFinalSubmit = async () => {
           </div>
         </div>
 
-        {/* 2x2 Grid for Payment Details */}
         <div className="njec-payment-details">
           <div className="njec-form-grid-2x2">
             <div className="njec-form-row">
@@ -821,47 +836,69 @@ const handleFinalSubmit = async () => {
             </div>
           </div>
 
+          {/* Upload Section with Loading and Success States */}
           <div className="njec-form-group njec-full-width">
             <label className="njec-form-label">
               <Upload size={18} />
               Payment Proof *
             </label>
             <div className="njec-upload-container">
-              <div className="njec-upload-area">
-                <input
-                  type="file"
-                  id="screenshot-upload"
-                  accept="image/*"
-                  onChange={handleScreenshotUpload}
-                  className="njec-upload-input"
-                />
-                <label htmlFor="screenshot-upload" className="njec-upload-label">
-                  <div className="njec-upload-icon">
-                    <Camera size={40} />
-                  </div>
-                  <div className="njec-upload-text">
-                    <h5>Upload Payment Screenshot</h5>
-                    <p>Drag & drop or click to upload your payment confirmation</p>
-                    <p className="njec-upload-note">Supports: JPEG, PNG, JPG (Max 5MB)</p>
-                  </div>
-                </label>
-              </div>
+              {/* Upload Area - Hidden when preview is shown or uploading */}
+              {!paymentInfo.screenshotPreview && !isUploading && (
+                <div className="njec-upload-area">
+                  <input
+                    type="file"
+                    id="screenshot-upload"
+                    accept="image/*"
+                    onChange={handleScreenshotUpload}
+                    className="njec-upload-input"
+                    disabled={isUploading}
+                  />
+                  <label htmlFor="screenshot-upload" className="njec-upload-label">
+                    <div className="njec-upload-icon">
+                      <Camera size={40} />
+                    </div>
+                    <div className="njec-upload-text">
+                      <h5>Upload Payment Screenshot</h5>
+                      <p>Drag & drop or click to upload your payment confirmation</p>
+                      <p className="njec-upload-note">Supports: JPEG, PNG, JPG (Max 5MB)</p>
+                    </div>
+                  </label>
+                </div>
+              )}
               
+              {/* Loading State */}
+              {isUploading && (
+                <div className="njec-upload-area njec-upload-loading">
+                  <div className="njec-upload-loading-content">
+                    <div className="njec-upload-spinner">
+                      <div className="njec-spinner-circle"></div>
+                      <div className="njec-spinner-circle"></div>
+                      <div className="njec-spinner-circle"></div>
+                    </div>
+                    <h5 className="njec-upload-loading-title">Uploading Screenshot...</h5>
+                    <p className="njec-upload-loading-text">Please wait while we process your file</p>
+                    <div className="njec-upload-progress-bar">
+                      <div className="njec-upload-progress-fill"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Screenshot Preview with Red X Button */}
               {paymentInfo.screenshotPreview && (
                 <div className="njec-screenshot-preview">
                   <div className="njec-screenshot-header">
-                    <span className="njec-screenshot-title">Uploaded Proof</span>
+                    <div className="njec-screenshot-header-left">
+                      <CheckCircle size={18} className="njec-screenshot-success-icon" />
+                      <span className="njec-screenshot-title">Payment Proof Uploaded</span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        setPaymentInfo(prev => ({
-                          ...prev,
-                          screenshot: null,
-                          screenshotPreview: null
-                        }));
-                      }}
+                      onClick={handleRemoveScreenshot}
                       className="njec-remove-screenshot"
                       aria-label="Remove screenshot"
+                      title="Remove screenshot"
                     >
                       <X size={18} />
                     </button>
@@ -873,6 +910,16 @@ const handleFinalSubmit = async () => {
                   />
                 </div>
               )}
+              
+              {/* Success Message */}
+              {uploadSuccess && (
+                <div className="njec-upload-success-message">
+                  <CheckCircle size={16} />
+                  <span>Screenshot uploaded successfully!</span>
+                </div>
+              )}
+              
+              {/* Error Message */}
               {errors.screenshot && (
                 <div className="njec-error-message">
                   <AlertCircle size={14} />
@@ -884,7 +931,6 @@ const handleFinalSubmit = async () => {
         </div>
       </div>
 
-      {/* 2x2 Grid for Final Summary */}
       <div className="njec-final-summary">
         <div className="njec-summary-grid-2x2">
           <div className="njec-summary-card summary-highlight">
@@ -927,11 +973,11 @@ const handleFinalSubmit = async () => {
             <div className="njec-summary-card-content">
               <div className="njec-total-display">
                 <div className="njec-total-label">
-                  <DollarSign size={24} />
+                  <span>M</span>
                   <span>Total Amount Due</span>
                 </div>
                 <div className="njec-total-amount">
-                  M {calculateTotal().toLocaleString()}
+                  M{calculateTotal().toLocaleString()}
                 </div>
               </div>
               <div className="njec-summary-note">
@@ -959,7 +1005,6 @@ const handleFinalSubmit = async () => {
             You will receive a confirmation email within 24 hours.
           </p>
           
-          {/* 2x2 Grid for Success Details */}
           <div className="njec-success-grid-2x2">
             <div className="njec-success-detail">
               <span className="njec-detail-label">Student Number</span>
@@ -971,7 +1016,7 @@ const handleFinalSubmit = async () => {
             </div>
             <div className="njec-success-detail">
               <span className="njec-detail-label">Total Amount</span>
-              <span className="njec-detail-value">M {calculateTotal().toLocaleString()}</span>
+              <span className="njec-detail-value">M{calculateTotal().toLocaleString()}</span>
             </div>
             <div className="njec-success-detail">
               <span className="njec-detail-label">Current Status</span>
@@ -1013,7 +1058,7 @@ const handleFinalSubmit = async () => {
             <button
               onClick={() => {
                 setShowSuccess(false);
-                navigate('/dashboard');
+                navigate('/studentdashboard');
               }}
               className="njec-btn njec-btn-outline"
             >
@@ -1028,16 +1073,15 @@ const handleFinalSubmit = async () => {
   // Feature cards data
   const features = [
     { icon: Shield, title: 'Secure & Encrypted', description: 'Bank-level security for all your data', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { icon: Trophy, title: 'Quality Education', description: 'Certified instructors & modern curriculum', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { icon: People, title: 'Student Support', description: '24/7 academic support available', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-    { icon: ChartUp, title: 'Proven Results', description: '95% student satisfaction rate', gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+    { icon: Award, title: 'Quality Education', description: 'Certified instructors & modern curriculum', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+    { icon: Users, title: 'Student Support', description: '24/7 academic support available', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+    { icon: TrendingUp, title: 'Proven Results', description: '95% student satisfaction rate', gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
     { icon: Target, title: 'Focused Learning', description: 'Personalized study plans for each student', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
     { icon: Zap, title: 'Quick Progress', description: 'Accelerated learning techniques', gradient: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
   ];
 
   return (
     <div className="njec-registration-container">
-      {/* Animated Background */}
       <div className="njec-animated-bg">
         <div className="njec-bg-shape njec-bg-shape-1"></div>
         <div className="njec-bg-shape njec-bg-shape-2"></div>
@@ -1045,10 +1089,8 @@ const handleFinalSubmit = async () => {
         <div className="njec-bg-shape njec-bg-shape-4"></div>
       </div>
 
-      {/* Main Grid Container */}
       <div className="njec-grid-container">
         
-        {/* Row 1: Header */}
         <div className="njec-grid-header">
           <div className="njec-logo-section">
             <div className="njec-logo-wrapper">
@@ -1067,10 +1109,8 @@ const handleFinalSubmit = async () => {
           </div>
         </div>
 
-        {/* Row 2: Main Content Grid - 2x2 Layout */}
         <div className="njec-main-grid-2x2">
           
-          {/* Top Left: Progress & Navigation */}
           <div className="njec-grid-section progress-section">
             <div className="njec-progress-section">
               <div className="njec-progress-header">
@@ -1113,7 +1153,6 @@ const handleFinalSubmit = async () => {
               </div>
             </div>
 
-            {/* Current Stage Info */}
             <div className="njec-current-stage">
               <div className="njec-stage-indicator">
                 <div className="njec-stage-badge">
@@ -1133,14 +1172,12 @@ const handleFinalSubmit = async () => {
             </div>
           </div>
 
-          {/* Top Right: Main Form Content */}
           <div className="njec-grid-section form-section">
             <div className="njec-form-container">
               {currentStage === 1 && renderStage1()}
               {currentStage === 2 && renderStage2()}
               {currentStage === 3 && renderStage3()}
 
-              {/* Submission Error */}
               {stageErrors.submission && (
                 <div className="njec-submission-error">
                   <AlertCircle size={20} />
@@ -1150,7 +1187,6 @@ const handleFinalSubmit = async () => {
             </div>
           </div>
 
-          {/* Bottom Left: Navigation Buttons */}
           <div className="njec-grid-section navigation-section">
             <div className="njec-navigation-buttons">
               <div className="njec-nav-left">
@@ -1189,12 +1225,11 @@ const handleFinalSubmit = async () => {
             </div>
           </div>
 
-          {/* Bottom Right: Features Grid */}
           <div className="njec-grid-section features-section">
             <div className="njec-features-grid-2x2">
               <div className="njec-features-header">
                 <h3 className="njec-features-title">
-                  <Goal size={24} />
+                  <Target size={24} />
                   Why Choose NJEC?
                 </h3>
                 <p className="njec-features-subtitle">Experience excellence in education</p>
@@ -1217,7 +1252,6 @@ const handleFinalSubmit = async () => {
         </div>   
       </div>
 
-      {/* Loading Overlay */}
       {isLoading && (
         <div className="njec-loading-overlay">
           <div className="njec-loading-modal">
@@ -1237,7 +1271,6 @@ const handleFinalSubmit = async () => {
         </div>
       )}
 
-      {/* Success Modal */}
       {showSuccess && <SuccessModal />}
     </div>
   );

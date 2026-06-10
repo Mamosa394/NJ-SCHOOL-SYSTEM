@@ -54,7 +54,7 @@ if (supabaseServiceKey && supabaseServiceKey.trim() !== '') {
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'], // Add your frontend URLs
+  origin: ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -68,7 +68,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
@@ -103,7 +103,6 @@ const extractSupabaseUser = async (req, res, next) => {
   }
 };
 
-// Apply auth middleware to all routes
 app.use(extractSupabaseUser);
 
 // ==================== HEALTH CHECK ====================
@@ -121,25 +120,50 @@ app.get('/api/health', (req, res) => {
 const formatPhoneNumber = (phone) => {
   if (!phone) return null;
   
-  // Remove all spaces
   let cleaned = phone.replace(/\s+/g, '');
   
-  // If it starts with +, keep the + and only keep digits after it
   if (cleaned.startsWith('+')) {
     const digits = cleaned.substring(1).replace(/\D/g, '');
     if (digits.length >= 7) {
       return `+${digits}`;
     }
   } else {
-    // Otherwise just keep digits
     const digits = cleaned.replace(/\D/g, '');
     if (digits.length >= 7) {
-      // Assume Lesotho country code +266
       return `+266${digits.slice(-7)}`;
     }
   }
   
-  return null; // Invalid phone number
+  return null;
+};
+
+// ==================== DATE FORMATTING HELPER ====================
+const formatDate = (dateString) => {
+  if (!dateString) return null;
+  
+  console.log(`📅 Formatting date: "${dateString}"`);
+  
+  // If it's already in YYYY-MM-DD format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateRegex.test(dateString)) {
+    const [year, month, day] = dateString.split('-');
+    // Validate the date is reasonable (after year 1900)
+    if (parseInt(year) > 1900) {
+      console.log(`📅 Date valid: ${dateString}`);
+      return dateString;
+    }
+  }
+  
+  // Try parsing as a Date object
+  const date = new Date(dateString);
+  if (!isNaN(date.getTime()) && date.getFullYear() > 1900) {
+    const formatted = date.toISOString().split('T')[0];
+    console.log(`📅 Date parsed: "${dateString}" -> "${formatted}"`);
+    return formatted;
+  }
+  
+  console.log(`⚠️ Invalid date: "${dateString}"`);
+  return null;
 };
 
 // ==================== STUDENT REGISTRATION ====================
@@ -148,7 +172,6 @@ app.post('/api/students', async (req, res) => {
     console.log('📥 Received student registration request');
     console.log('Request body:', req.body);
     
-    // Check authentication
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -173,7 +196,6 @@ app.post('/api/students', async (req, res) => {
       enrollment_status = 'pending'
     } = studentData;
 
-    // Validate required fields
     const requiredFields = ['full_name', 'student_number', 'email', 'phone', 'birth_date', 'gender'];
     const missingFields = requiredFields.filter(field => !studentData[field]);
     
@@ -184,7 +206,6 @@ app.post('/api/students', async (req, res) => {
       });
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -193,7 +214,6 @@ app.post('/api/students', async (req, res) => {
       });
     }
 
-    // Format student number
     let finalStudentNumber = String(student_number).replace(/\D/g, '');
     if (finalStudentNumber.length !== 9) {
       if (finalStudentNumber.length < 9) {
@@ -203,11 +223,9 @@ app.post('/api/students', async (req, res) => {
       }
     }
 
-    // Format phone number to pass database constraint
     const formattedPhone = formatPhoneNumber(phone);
     console.log(`📞 Phone formatted from "${phone}" to "${formattedPhone}"`);
 
-    // Check if student number already exists
     const { data: existingStudent } = await supabaseAdmin
       .from('students')
       .select('student_number')
@@ -215,14 +233,12 @@ app.post('/api/students', async (req, res) => {
       .maybeSingle();
 
     if (existingStudent) {
-      // Generate a new unique student number
       const year = new Date().getFullYear();
       const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       finalStudentNumber = `${year}${random}`.slice(0, 9);
       console.log(`🔄 Generated new student number: ${finalStudentNumber}`);
     }
 
-    // Check if email already exists
     const { data: existingEmail } = await supabaseAdmin
       .from('students')
       .select('email')
@@ -236,14 +252,13 @@ app.post('/api/students', async (req, res) => {
       });
     }
 
-    // Prepare student data for insertion
     const studentRecord = {
       id: userId,
       full_name,
       student_number: finalStudentNumber,
       email,
       phone: formattedPhone,
-      birth_date,
+      birth_date: formatDate(birth_date),
       gender,
       enrollment_status,
       grade_level,
@@ -256,7 +271,6 @@ app.post('/api/students', async (req, res) => {
 
     console.log('📊 Inserting student data:', studentRecord);
 
-    // Insert into students table
     const { data: insertedStudent, error: dbError } = await supabaseAdmin
       .from('students')
       .insert([studentRecord])
@@ -266,14 +280,14 @@ app.post('/api/students', async (req, res) => {
     if (dbError) {
       console.error('❌ Database insertion error:', dbError);
       
-      if (dbError.code === '23505') { // Unique violation
+      if (dbError.code === '23505') {
         return res.status(400).json({
           success: false,
           error: 'Student number or email already exists'
         });
       }
       
-      if (dbError.code === '23514') { // Check constraint violation
+      if (dbError.code === '23514') {
         return res.status(400).json({
           success: false,
           error: 'Invalid data format. Please check phone number format.'
@@ -315,7 +329,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
 
     console.log('📥 Complete registration request for:', req.user.email);
     
-    // Parse the registration data
     let registrationData;
     try {
       registrationData = JSON.parse(req.body.data || '{}');
@@ -344,7 +357,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       payer_name
     } = registrationData;
 
-    // Validate required fields
     const requiredFields = ['full_name', 'student_number', 'email', 'phone', 'birth_date', 'gender'];
     const missingFields = requiredFields.filter(field => !registrationData[field]);
     
@@ -355,7 +367,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       });
     }
 
-    // Format student number
     let finalStudentNumber = String(student_number).replace(/\D/g, '');
     if (finalStudentNumber.length !== 9) {
       if (finalStudentNumber.length < 9) {
@@ -365,11 +376,9 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       }
     }
 
-    // Format phone number to pass database constraint
     const formattedPhone = formatPhoneNumber(phone);
     console.log(`📞 Phone formatted from "${phone}" to "${formattedPhone}"`);
 
-    // Check if student number already exists
     const { data: existingStudent } = await supabaseAdmin
       .from('students')
       .select('student_number')
@@ -377,14 +386,12 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       .maybeSingle();
 
     if (existingStudent) {
-      // Generate a new unique student number
       const year = new Date().getFullYear();
       const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       finalStudentNumber = `${year}${random}`.slice(0, 9);
       console.log(`🔄 Generated new student number: ${finalStudentNumber}`);
     }
 
-    // Check if email already exists
     const { data: existingEmail } = await supabaseAdmin
       .from('students')
       .select('email')
@@ -398,14 +405,13 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       });
     }
 
-    // Prepare student data for insertion
     const studentRecord = {
       id: userId,
       full_name,
       student_number: finalStudentNumber,
       email,
       phone: formattedPhone,
-      birth_date,
+      birth_date: formatDate(birth_date),
       gender,
       enrollment_status: 'pending',
       grade_level,
@@ -418,7 +424,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
 
     console.log('📊 Inserting student data');
 
-    // Insert into students table
     const { data: insertedStudent, error: dbError } = await supabaseAdmin
       .from('students')
       .insert([studentRecord])
@@ -428,14 +433,14 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
     if (dbError) {
       console.error('❌ Database insertion error:', dbError);
       
-      if (dbError.code === '23505') { // Unique violation
+      if (dbError.code === '23505') {
         return res.status(400).json({
           success: false,
           error: 'Student number or email already exists'
         });
       }
       
-      if (dbError.code === '23514') { // Check constraint violation
+      if (dbError.code === '23514') {
         return res.status(400).json({
           success: false,
           error: 'Invalid data format. Please check phone number format.'
@@ -475,10 +480,17 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
 
     // Save payment information
     if (payment_method) {
-      // Calculate total amount based on subjects
+      // Calculate total amount based on subjects (Maloti)
       const subjectPrices = {
-        math: 450, physics: 500, sesotho: 350, english: 400,
-        economics: 480, accounts: 520, biology: 470, computers: 490, geography: 430
+        math_core: 180,
+        math_extended: 180,
+        physics: 180,
+        chemistry: 180,
+        physical_science: 360,
+        sesotho: 180,
+        english: 180,
+        accounting: 180,
+        biology: 180
       };
       
       const totalAmount = (subjects || []).reduce(
@@ -534,7 +546,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
 
 // ==================== PAYMENT ENDPOINTS ====================
 
-// Upload payment proof only
 app.post('/api/upload-payment-proof', upload.single('paymentProof'), async (req, res) => {
   try {
     if (!req.user) {
@@ -562,11 +573,9 @@ app.post('/api/upload-payment-proof', upload.single('paymentProof'), async (req,
 
     console.log(`📤 Uploading payment proof for student: ${studentId}`);
 
-    // Generate unique filename
     const fileExt = req.file.originalname.split('.').pop();
     const fileName = `${studentId}/${Date.now()}_payment.${fileExt}`;
 
-    // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('payment-proofs')
       .upload(fileName, req.file.buffer, {
@@ -579,7 +588,6 @@ app.post('/api/upload-payment-proof', upload.single('paymentProof'), async (req,
       throw uploadError;
     }
 
-    // Get public URL
     const { data: { publicUrl } } = supabaseAdmin.storage
       .from('payment-proofs')
       .getPublicUrl(fileName);
@@ -605,7 +613,6 @@ app.post('/api/upload-payment-proof', upload.single('paymentProof'), async (req,
   }
 });
 
-// Submit payment information
 app.post('/api/payments', async (req, res) => {
   try {
     if (!req.user) {
@@ -625,7 +632,6 @@ app.post('/api/payments', async (req, res) => {
       subjects
     } = req.body;
 
-    // Validate required fields
     const requiredFields = ['student_id', 'payment_method', 'payment_number', 'payer_name', 'amount', 'subjects'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
@@ -638,7 +644,6 @@ app.post('/api/payments', async (req, res) => {
 
     console.log(`💰 Processing payment for student: ${student_id}`);
 
-    // Check if student exists
     const { data: student, error: studentError } = await supabaseAdmin
       .from('students')
       .select('id')
@@ -652,7 +657,6 @@ app.post('/api/payments', async (req, res) => {
       });
     }
 
-    // Prepare payment data
     const paymentData = {
       student_id,
       payment_method,
@@ -668,7 +672,6 @@ app.post('/api/payments', async (req, res) => {
       updated_by: req.user.id
     };
 
-    // Insert payment record
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert([paymentData])
@@ -698,7 +701,6 @@ app.post('/api/payments', async (req, res) => {
   }
 });
 
-// Get payments for a student
 app.get('/api/payments/student/:studentId', async (req, res) => {
   try {
     if (!req.user) {
@@ -735,7 +737,6 @@ app.get('/api/payments/student/:studentId', async (req, res) => {
   }
 });
 
-// Get single payment
 app.get('/api/payments/:paymentId', async (req, res) => {
   try {
     if (!req.user) {
@@ -778,7 +779,6 @@ app.get('/api/payments/:paymentId', async (req, res) => {
   }
 });
 
-// Update payment status (admin only)
 app.put('/api/payments/:paymentId/status', async (req, res) => {
   try {
     if (!req.user) {
@@ -1016,14 +1016,12 @@ app.get('/api/auth/profile', async (req, res) => {
       });
     }
 
-    // Get student record if exists
     const { data: studentData } = await supabaseAdmin
       .from('students')
       .select('*')
       .eq('id', req.user.id)
       .maybeSingle();
 
-    // Get payment records if any
     const { data: paymentData } = await supabaseAdmin
       .from('payments')
       .select('*')

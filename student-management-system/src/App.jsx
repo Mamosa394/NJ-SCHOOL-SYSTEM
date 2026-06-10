@@ -35,9 +35,10 @@ function App() {
         <Route path="/ss" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/s" element={<StudentRegistration />} />
-        <Route path="/s" element={<SignUp />} />
+        <Route path="/signup" element={<SignUp />} />
         <Route path="/registration" element={<MultiStageRegistration />} />
-          <Route path="/adminVerification" element={<AdminVerification />} />
+        <Route path="/adminVerification" element={<AdminVerification />} />
+        <Route path="/studentdashboard" element={<StudentDashboard />} />
 
 
 
