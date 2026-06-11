@@ -7,6 +7,7 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
+import SelectRole from './components/SelectRole';
 import MultiStageRegistration from './components/MultiStageRegistration';
 import './App.css';
 import SignUp from './components/Signup';
@@ -38,7 +39,11 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/registration" element={<MultiStageRegistration />} />
         <Route path="/adminVerification" element={<AdminVerification />} />
+        <Route path="/select-role" element={<SelectRole />} />
         <Route path="/studentdashboard" element={<StudentDashboard />} />
+        <Route path="/teacherdashboard" element={<TeacherDashboard />} />
+        <Route path="/admindashboard" element={<AdminDashboard />} />
+        <Route path="/parentdashboard" element={<ParentDashboard />} />
 
 
 

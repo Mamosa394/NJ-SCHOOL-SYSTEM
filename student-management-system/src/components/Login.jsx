@@ -63,13 +63,13 @@ const Login = () => {
 
   const navigateBasedOnRole = (role) => {
     const routes = {
-      admin: '/admin/dashboard',
-      teacher: '/teacher/dashboard',
-      student: '/student/dashboard',
-      parent: '/parent/dashboard'
+      admin: '/admindashboard',
+      teacher: '/teacherdashboard',
+      student: '/studentdashboard',
+      parent: '/parentdashboard'
     };
     
-    const redirectPath = routes[role] || '/student/dashboard';
+    const redirectPath = routes[role] || '/select-role';
     
     setTimeout(() => {
       navigate(redirectPath, { replace: true });

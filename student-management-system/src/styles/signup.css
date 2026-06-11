@@ -927,3 +927,186 @@
     display: none;
   }
 }
+
+/* Role Selection Styles */
+.signup-role-section {
+  animation: fadeInUp 0.4s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.signup-role-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.signup-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.signup-role-card {
+  position: relative;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  outline: none;
+  font-family: inherit;
+  width: 100%;
+}
+
+.signup-role-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--role-color);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.signup-role-card.selected {
+  background: var(--role-gradient);
+  border-color: var(--role-color);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.signup-role-card.selected .signup-role-name,
+.signup-role-card.selected .signup-role-desc {
+  color: white;
+}
+
+.signup-role-icon-wrapper {
+  position: relative;
+}
+
+.signup-role-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.signup-role-check {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 24px;
+  height: 24px;
+  background: #10B981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.signup-role-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.signup-role-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.signup-role-desc {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.signup-role-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.signup-btn-outline {
+  background: white;
+  border: 2px solid #e5e7eb;
+  color: #374151;
+  padding: 1rem;
+  border-radius: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.signup-btn-outline:hover:not(:disabled) {
+  border-color: #2563EB;
+  color: #2563EB;
+}
+
+.signup-btn-outline.disabled,
+.signup-btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Selected Role Badge in Email Form */
+.signup-selected-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  border: 1px solid;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.signup-error-message {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .signup-role-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .signup-role-card {
+    padding: 1.25rem;
+  }
+}
