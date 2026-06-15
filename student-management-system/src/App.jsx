@@ -5,7 +5,7 @@ import Login from "./components/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherDashboard from "./Teacher/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
-import StudentDashboard from "./pages/StudentDashboard";
+import StudentDashboard from "./pages/students/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
 import SelectRole from './components/SelectRole';
 import MultiStageRegistration from './components/MultiStageRegistration';

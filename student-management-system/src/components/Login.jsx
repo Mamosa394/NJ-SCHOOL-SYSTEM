@@ -10,7 +10,6 @@ import {
   UserPlus,
   Key,
   CheckCircle,
-  Users,
   AlertCircle
 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
@@ -37,8 +36,6 @@ const Login = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        // Only redirect if there's an active session AND user has a complete profile
-        // AND user is not currently in the login process
         if (session?.user && !isLoggingIn && !isRedirecting) {
           const { data: profile } = await supabase
             .from('profiles')
@@ -46,19 +43,16 @@ const Login = () => {
             .eq('id', session.user.id)
             .single();
 
-          // Only auto-redirect if profile is complete (has a role)
           if (profile?.role) {
             setIsRedirecting(true);
             navigateBasedOnRole(profile.role);
           } else {
-            // If no role, clear the incomplete session
             await supabase.auth.signOut();
             localStorage.removeItem('user');
           }
         }
       } catch (error) {
         console.error('Error checking session:', error);
-        // If error, sign out to allow fresh login
         await supabase.auth.signOut();
         localStorage.removeItem('user');
       }
@@ -69,13 +63,11 @@ const Login = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
       
-      // Only handle SIGNED_IN if it happened during an active login attempt
       if (event === 'SIGNED_IN' && session && isLoggingIn && !isRedirecting) {
         setIsRedirecting(true);
         await handleSuccessfulAuth(session.user);
       }
       
-      // Handle sign out during login attempt
       if (event === 'SIGNED_OUT') {
         setIsLoggingIn(false);
         setIsRedirecting(false);
@@ -87,10 +79,8 @@ const Login = () => {
     };
   }, [isLoggingIn, isRedirecting, navigate]);
 
-  // Clean up login state on unmount
   useEffect(() => {
     return () => {
-      // When leaving login page, clean up if not in the middle of logging in
       if (!isLoggingIn && !isRedirecting) {
         supabase.auth.signOut().catch(console.error);
         localStorage.removeItem('user');
@@ -115,7 +105,6 @@ const Login = () => {
 
   const handleSuccessfulAuth = async (user) => {
     try {
-      // Fetch user profile with role from Supabase
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -123,8 +112,6 @@ const Login = () => {
         .single();
 
       if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        // If no profile exists, create a basic one and redirect to role selection
         const { error: insertError } = await supabase
           .from('profiles')
           .upsert({
@@ -150,7 +137,6 @@ const Login = () => {
       }
 
       if (profile && profile.role) {
-        // User has a role - redirect to respective dashboard
         const userData = {
           id: user.id,
           email: user.email,
@@ -162,7 +148,6 @@ const Login = () => {
         localStorage.setItem('user', JSON.stringify(userData));
         navigateBasedOnRole(profile.role);
       } else {
-        // User exists but no role selected yet
         navigate('/select-role', { 
           state: { 
             userId: user.id,
@@ -215,10 +200,8 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Email/Password Login
   const handleEmailLogin = async (e) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
     
     setLoading(true);
@@ -249,7 +232,6 @@ const Login = () => {
     }
   };
 
-  // Google Login
   const handleGoogleLogin = async () => {
     if (loading || isRedirecting) return;
     
@@ -258,12 +240,11 @@ const Login = () => {
     setErrors({});
     
     try {
-      // Clear any existing session first
       await supabase.auth.signOut();
       localStorage.removeItem('user');
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/login`,
@@ -276,8 +257,6 @@ const Login = () => {
 
       if (error) throw error;
       
-      // OAuth redirect will happen automatically
-      
     } catch (error) {
       console.error('Google login error:', error);
       setErrors({ server: error.message || 'Failed to login with Google' });
@@ -286,132 +265,159 @@ const Login = () => {
     }
   };
 
-  const handleForgotPassword = () => {
-    navigate('/forgot-password');
-  };
-
   return (
-    <div className="njec-login-container">
-      {/* Background Elements */}
-      <div className="njec-login-bg-shapes">
-        <div className="njec-login-shape shape-1"></div>
-        <div className="njec-login-shape shape-2"></div>
-        <div className="njec-login-shape shape-3"></div>
-      </div>
-
-      <div className="njec-login-wrapper">
-        {/* Left Side - Login Form */}
-        <div className="njec-login-form-section">
-          <button 
-            onClick={() => navigate('/')}
-            className="njec-back-button"
-          >
-            ← Back to Home
-          </button>
-
-          <div className="njec-login-header">
-            <div className="njec-login-logo">
-              <div className="njec-login-logo-icon">
-                <img src={Logo} className="njec-login-logo-icon" alt="Logo"/>
+    <div className="auth-container">
+      <div className="auth-wrapper">
+        
+        {/* Left Panel - Brand Info with Gradient Background Image Setup */}
+        <div className="auth-brand-panel">
+          <div className="auth-brand-content">
+            
+            {/* Top Row: Logo & Escape Trigger */}
+            <div className="auth-brand-header-row">
+              <div className="auth-logo-section">
+                <div className="auth-logo-img">
+                  <img src={Logo} alt="Logo" />
+                </div>
+                <div className="auth-brand-text">
+                  <h1>NJEC</h1>
+                  <span>New Jerusalem Extra Classes</span>
+                </div>
               </div>
-              <div className="njec-login-brand">
-                <h1>NJEC</h1>
-                <span>New Jerusalem Extra Classes</span>
+              
+              <button onClick={() => navigate('/')} className="auth-back-btn">
+                ← Back to Home
+              </button>
+            </div>
+            
+            {/* Lower Area: Your Text/Components Overlaying Image */}
+            <div className="auth-brand-body">
+              <div className="auth-testimonial-compact">
+                <div className="auth-quote-icon">"</div>
+                <p className="auth-testimonial-text">
+                  Search and find more learning resources in one place now. Just enroll in courses and learn at your own pace.
+                </p>
+                <div className="auth-testimonial-person">
+                  <div className="auth-person-avatar">TT</div>
+                  <div className="auth-person-details">
+                    <span className="auth-person-name">Thabo TLou</span>
+                    <span className="auth-person-role">UI Designer & Student</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="auth-stats-compact">
+                <div className="auth-stat-item">
+                  <span className="auth-stat-value">500+</span>
+                  <span className="auth-stat-desc">Students</span>
+                </div>
+                <div className="auth-stat-divider"></div>
+                <div className="auth-stat-item">
+                  <span className="auth-stat-value">98%</span>
+                  <span className="auth-stat-desc">Satisfaction</span>
+                </div>
+                <div className="auth-stat-divider"></div>
+                <div className="auth-stat-item">
+                  <span className="auth-stat-value">15+</span>
+                  <span className="auth-stat-desc">Subjects</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="njec-form-container">
-            <div className="njec-form-header">
+          </div>
+        </div>
+
+        {/* Right Panel - Login Form */}
+        <div className="auth-form-panel">
+          <div className="auth-form-content">
+            <div className="auth-form-header">
               <h2>Welcome back</h2>
               <p>Please enter your account details</p>
             </div>
 
             {errors.server && (
-              <div className="njec-error-banner">
-                <AlertCircle size={18} />
+              <div className="auth-error-alert">
+                <AlertCircle size={16} />
                 <span>{errors.server}</span>
               </div>
             )}
 
-            <form onSubmit={handleEmailLogin} className="njec-login-form">
+            <form onSubmit={handleEmailLogin} className="auth-form">
               {/* Email Field */}
-              <div className="njec-form-group">
-                <label htmlFor="email" className="njec-form-label">
-                  <Mail size={18} />
-                  <span>Email</span>
+              <div className="auth-input-group">
+                <label className="auth-input-label">
+                  <Mail size={16} />
+                  Email
                 </label>
-                <div className="njec-input-wrapper">
+                <div className="auth-input-field">
                   <input
                     type="email"
-                    id="email"
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="thabo@gmail.com"
-                    className={`njec-input ${errors.email ? 'error' : ''}`}
+                    className={`auth-input ${errors.email ? 'input-error' : ''}`}
                     disabled={loading}
                   />
                   {formData.email && !errors.email && (
-                    <CheckCircle size={18} className="njec-input-success" />
+                    <CheckCircle size={16} className="auth-input-check" />
                   )}
                 </div>
                 {errors.email && (
-                  <span className="njec-error-message">{errors.email}</span>
+                  <span className="auth-error-text">{errors.email}</span>
                 )}
               </div>
 
               {/* Password Field */}
-              <div className="njec-form-group">
-                <label htmlFor="password" className="njec-form-label">
-                  <Lock size={18} />
-                  <span>Password</span>
+              <div className="auth-input-group">
+                <label className="auth-input-label">
+                  <Lock size={16} />
+                  Password
                 </label>
-                <div className="njec-input-wrapper">
+                <div className="auth-input-field">
                   <input
                     type={showPassword ? "text" : "password"}
-                    id="password"
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="*********"
-                    className={`njec-input ${errors.password ? 'error' : ''}`}
+                    placeholder="Enter password"
+                    className={`auth-input ${errors.password ? 'input-error' : ''}`}
                     disabled={loading}
                   />
                   <button
                     type="button"
-                    className="njec-password-toggle"
+                    className="auth-password-eye"
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={loading}
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 {errors.password && (
-                  <span className="njec-error-message">{errors.password}</span>
+                  <span className="auth-error-text">{errors.password}</span>
                 )}
               </div>
 
-              {/* Remember Me & Forgot Password */}
-              <div className="njec-form-options">
-                <label className="njec-checkbox-label">
+              {/* Options Row */}
+              <div className="auth-options-row">
+                <label className="auth-remember">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
                     disabled={loading}
                   />
-                  <span className="njec-checkbox-custom"></span>
+                  <span className="auth-checkbox-visual"></span>
                   Remember me
                 </label>
                 
                 <button
                   type="button"
-                  onClick={handleForgotPassword}
-                  className="njec-forgot-password"
+                  onClick={() => navigate('/forgot-password')}
+                  className="auth-forgot-link"
                   disabled={loading}
                 >
-                  <Key size={16} />
+                  <Key size={14} />
                   Forgot Password?
                 </button>
               </div>
@@ -419,128 +425,57 @@ const Login = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="njec-submit-button"
+                className="auth-submit-btn"
                 disabled={loading}
               >
                 {loading ? (
-                  <div className="njec-spinner"></div>
+                  <div className="auth-btn-spinner"></div>
                 ) : (
                   <>
                     <span>Sign In</span>
-                    <ArrowRight size={20} />
+                    <ArrowRight size={18} />
                   </>
                 )}
               </button>
 
               {/* Divider */}
-              <div className="njec-divider">
+              <div className="auth-separator">
                 <span>Or continue with</span>
               </div>
 
-              {/* Social Login Buttons */}
-              <div className="njec-social-login">
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  className="njec-social-button google"
-                  disabled={loading || isRedirecting}
-                >
-                  <FcGoogle size={20} />
-                  Google
-                </button>
-              </div>
+              {/* Google Login */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="auth-google-btn"
+                disabled={loading || isRedirecting}
+              >
+                <FcGoogle size={18} />
+                Google
+              </button>
 
-              {/* Registration Link */}
-              <div className="njec-registration-link">
-                <UserPlus size={18} />
+              {/* Register Link */}
+              <div className="auth-register-prompt">
+                <UserPlus size={16} />
                 <span>New registration?</span>
-                <Link to="/signup" className="njec-register-link">
+                <Link to="/signup" className="auth-register-link">
                   Create an account
                 </Link>
               </div>
             </form>
 
-            <div className="njec-login-trust">
-              <Shield size={20} />
+            <div className="auth-security-badge">
+              <Shield size={16} />
               <span>Your data is securely protected</span>
             </div>
-          </div>
-        </div>
-
-        {/* Right Side - Info */}
-        <div className="njec-login-info-section">
-          <div className="njec-info-card">
-            <div className="njec-quote-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
-              </svg>
-            </div>
-
-            <div className="njec-testimonial">
-              <h3>What our Students Say</h3>
-              <p className="njec-testimonial-text">
-                "Search and find more learning resources in one place now. 
-                Just enroll in courses and learn at your own pace."
-              </p>
-              
-              <div className="njec-testimonial-author">
-                <div className="njec-author-avatar">TT</div>
-                <div className="njec-author-info">
-                  <h4>Thabo TLou</h4>
-                  <p>UI Designer & Student</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="njec-login-cta">
-              <h3>Get your learning journey started</h3>
-              <p>
-                Apply now to access premium courses, expert tutors, and 
-                comprehensive learning materials.
-              </p>
-              <button 
-                onClick={() => navigate('/signup')}
-                className="njec-cta-button"
-              >
-                Start Learning Now (Sign Up)
-                <ArrowRight size={20} />
-              </button>
-            </div>
-
-            <div className="njec-additional-info">
-              <p>
-                Be on the lookout for new courses and learning opportunities 
-                to experience the easiest way to advance your education.
-              </p>
-              <div className="njec-stats">
-                <div className="njec-stat">
-                  <span className="njec-stat-number">500+</span>
-                  <span className="njec-stat-label">Active Students</span>
-                </div>
-                <div className="njec-stat">
-                  <span className="njec-stat-number">98%</span>
-                  <span className="njec-stat-label">Satisfaction Rate</span>
-                </div>
-                <div className="njec-stat">
-                  <span className="njec-stat-number">15+</span>
-                  <span className="njec-stat-label">Subjects Available</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="njec-info-decoration">
-            <div className="njec-decoration-dot dot-1"></div>
-            <div className="njec-decoration-dot dot-2"></div>
-            <div className="njec-decoration-dot dot-3"></div>
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="njec-login-loading">
-          <div className="njec-loading-content">
-            <div className="njec-loading-spinner"></div>
+        <div className="auth-overlay-loading">
+          <div className="auth-loading-box">
+            <div className="auth-loading-animation"></div>
             <p>Signing you in...</p>
           </div>
         </div>

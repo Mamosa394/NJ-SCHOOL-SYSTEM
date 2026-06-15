@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import '../styles/MultiStageRegistration.css';
 import Logo from '../assets/Logo.jpg';
 import { 
   User, BookOpen, CreditCard, CheckCircle, ChevronRight, 
-  ArrowLeft, Loader, Shield, GraduationCap,
-  Upload, Camera, Phone, Wallet, Check, X, AlertCircle,
+  ArrowLeft, Upload, Camera, Phone, Wallet, Check, X, AlertCircle,
   Info, Calendar, Hash, Mail, PhoneCall, FileCheck, Lock,
-  Sparkles, Clock, Award, Target, Zap, Users, TrendingUp,
-  Home, Settings, HelpCircle, Bell, Star,
-  Goal, UserPlus
+  Sparkles, Clock, GraduationCap
 } from 'lucide-react';
 
 const MultiStageRegistration = () => {
@@ -20,27 +16,24 @@ const MultiStageRegistration = () => {
   const [currentStage, setCurrentStage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [progressPercentage, setProgressPercentage] = useState(33);
   const [showSuccess, setShowSuccess] = useState(false);
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  // All subjects treated equally - no categories
   const subjects = [
-    { id: 'math_core', name: 'Mathematics Core', price: 180, description: 'Standard mathematics curriculum', icon: '∫', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { id: 'math_extended', name: 'Mathematics Extended', price: 180, description: 'Advanced mathematics curriculum', icon: '∑', color: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)' },
-    { id: 'physics', name: 'Physics', price: 180, description: 'Physics principles & mechanics', icon: '⚡', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { id: 'chemistry', name: 'Chemistry', price: 180, description: 'Chemical reactions & elements', icon: '🧪', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-    { id: 'physical_science', name: 'Physical Science', price: 360, description: 'Physics & Chemistry combined', icon: '⚛', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-    { id: 'sesotho', name: 'Sesotho', price: 180, description: 'Language & literature studies', icon: '📖', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
-    { id: 'english', name: 'English', price: 180, description: 'English language mastery', icon: '🅰', color: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
-    { id: 'accounting', name: 'Accounting', price: 180, description: 'Accounting principles', icon: '💰', color: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' },
-    { id: 'biology', name: 'Biology', price: 180, description: 'Biological sciences', icon: '🧬', color: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
+    { id: 'math_core', name: 'Mathematics Core', price: 180 },
+    { id: 'math_extended', name: 'Mathematics Extended', price: 180 },
+    { id: 'physics', name: 'Physics', price: 180 },
+    { id: 'chemistry', name: 'Chemistry', price: 180 },
+    { id: 'physical_science', name: 'Physical Science', price: 360 },
+    { id: 'sesotho', name: 'Sesotho', price: 180 },
+    { id: 'english', name: 'English', price: 180 },
+    { id: 'accounting', name: 'Accounting', price: 180 },
+    { id: 'biology', name: 'Biology', price: 180 },
   ];
 
-  // Stage 1: Student Information
   const [studentInfo, setStudentInfo] = useState({
     full_name: '',
     student_number: '',
@@ -51,23 +44,20 @@ const MultiStageRegistration = () => {
     class_type: 'extra',
   });
 
-  // Stage 2: Subject Selection - all treated equally
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   
-  // Stage 3: Payment Information
   const [paymentInfo, setPaymentInfo] = useState({
     payment_method: 'mpesa',
     payment_number: '',
     payer_name: '',
     screenshot: null,
     screenshotPreview: null,
+    screenshotUrl: null,
   });
 
-  // Validation states
   const [errors, setErrors] = useState({});
   const [stageErrors, setStageErrors] = useState({});
 
-  // Get the current user on mount
   useEffect(() => {
     const getUser = async () => {
       setIsAuthLoading(true);
@@ -79,19 +69,14 @@ const MultiStageRegistration = () => {
         setUser(user);
         
         if (!user) {
-          console.log('No user found, redirecting to signup');
           navigate('/signup');
           return;
         }
 
-        console.log('User authenticated:', user.email);
-
         setStudentInfo(prev => ({
           ...prev,
           email: user.email || '',
-          full_name: user.user_metadata?.full_name || 
-                     user.user_metadata?.name || 
-                     prev.full_name
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || prev.full_name
         }));
 
         if (location.state) {
@@ -102,7 +87,6 @@ const MultiStageRegistration = () => {
             full_name: userName || prev.full_name
           }));
         }
-
       } catch (error) {
         console.error('Error getting user:', error);
         navigate('/signup');
@@ -116,16 +100,12 @@ const MultiStageRegistration = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
-      if (!session) {
-        navigate('/signup');
-      }
+      if (!session) navigate('/signup');
     });
 
     return () => subscription.unsubscribe();
   }, [navigate, location]);
 
-  // Calculate total price
   const calculateTotal = () => {
     return selectedSubjects.reduce((total, subjectId) => {
       const subject = subjects.find(s => s.id === subjectId);
@@ -133,88 +113,95 @@ const MultiStageRegistration = () => {
     }, 0);
   };
 
-  // Progress tracking
-  useEffect(() => {
-    const percentage = (currentStage / 3) * 100;
-    setProgressPercentage(percentage);
-  }, [currentStage]);
-
-  // Handle stage 1 input changes
   const handleStudentInfoChange = (e) => {
     const { name, value } = e.target;
-    setStudentInfo(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    setStudentInfo(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // Handle subject selection - simple toggle for all subjects
   const toggleSubject = (subjectId) => {
-    setSelectedSubjects(prev => {
-      if (prev.includes(subjectId)) {
-        return prev.filter(id => id !== subjectId);
-      } else {
-        return [...prev, subjectId];
-      }
-    });
+    setSelectedSubjects(prev => 
+      prev.includes(subjectId) 
+        ? prev.filter(id => id !== subjectId)
+        : [...prev, subjectId]
+    );
   };
 
-  // Handle payment info changes
   const handlePaymentInfoChange = (e) => {
     const { name, value } = e.target;
-    setPaymentInfo(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setPaymentInfo(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle screenshot upload with loading and success feedback
   const handleScreenshotUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setStageErrors(prev => ({ ...prev, screenshot: 'File size must be less than 5MB' }));
-        return;
-      }
-      if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-        setStageErrors(prev => ({ ...prev, screenshot: 'Only JPEG, JPG, or PNG files allowed' }));
-        return;
-      }
+    if (!file) return;
 
-      setIsUploading(true);
-      setStageErrors(prev => ({ ...prev, screenshot: '' }));
+    if (file.size > 5 * 1024 * 1024) {
+      setStageErrors(prev => ({ ...prev, screenshot: 'File size must be less than 5MB' }));
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+      setStageErrors(prev => ({ ...prev, screenshot: 'Only JPEG, JPG, or PNG files allowed' }));
+      return;
+    }
+
+    setIsUploading(true);
+    setStageErrors(prev => ({ ...prev, screenshot: '' }));
+    
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}-payment.${fileExt}`;
       
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const { error: uploadError } = await supabase.storage
+        .from('payment_screenshots')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('payment_screenshots')
+        .getPublicUrl(fileName);
+
       setPaymentInfo(prev => ({
         ...prev,
         screenshot: file,
-        screenshotPreview: URL.createObjectURL(file)
+        screenshotPreview: URL.createObjectURL(file),
+        screenshotUrl: publicUrl
       }));
       
-      setIsUploading(false);
       setUploadSuccess(true);
-      
-      setTimeout(() => {
-        setUploadSuccess(false);
-      }, 3000);
+      setTimeout(() => setUploadSuccess(false), 3000);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setStageErrors(prev => ({ ...prev, screenshot: 'Failed to upload. Please try again.' }));
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  // Handle removing screenshot
-  const handleRemoveScreenshot = () => {
+  const handleRemoveScreenshot = async () => {
+    if (paymentInfo.screenshotUrl) {
+      try {
+        const filePath = paymentInfo.screenshotUrl.split('/').slice(-2).join('/');
+        await supabase.storage.from('payment_screenshots').remove([filePath]);
+      } catch (error) {
+        console.error('Error deleting screenshot:', error);
+      }
+    }
+
     setPaymentInfo(prev => ({
       ...prev,
       screenshot: null,
-      screenshotPreview: null
+      screenshotPreview: null,
+      screenshotUrl: null
     }));
     setUploadSuccess(false);
   };
 
-  // Validate current stage
   const validateStage = () => {
     const newErrors = {};
 
@@ -224,9 +211,6 @@ const MultiStageRegistration = () => {
       if (!studentInfo.student_number.trim()) newErrors.student_number = 'Student number is required';
       if (studentInfo.student_number && !/^\d{9}$/.test(studentInfo.student_number)) {
         newErrors.student_number = 'Student number must be 9 digits';
-      }
-      if (studentInfo.student_number === '000000000' || studentInfo.student_number === '123456789') {
-        newErrors.student_number = 'Invalid student number';
       }
       if (!studentInfo.phone.trim()) newErrors.phone = 'Phone number is required';
       if (!studentInfo.birth_date) newErrors.birth_date = 'Birth date is required';
@@ -241,1037 +225,517 @@ const MultiStageRegistration = () => {
     if (currentStage === 3) {
       if (!paymentInfo.payment_number.trim()) newErrors.payment_number = 'Payment number is required';
       if (!paymentInfo.payer_name.trim()) newErrors.payer_name = 'Payer name is required';
-      if (!paymentInfo.screenshot) newErrors.screenshot = 'Payment screenshot is required';
+      if (!paymentInfo.screenshotUrl && !paymentInfo.screenshot) newErrors.screenshot = 'Payment screenshot is required';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Navigate to next stage
   const goToNextStage = () => {
     if (validateStage()) {
       if (currentStage < 3) {
         setCurrentStage(prev => prev + 1);
+        window.scrollTo(0, 0);
       } else {
         handleFinalSubmit();
       }
     }
   };
 
-  // Navigate to previous stage
   const goToPreviousStage = () => {
     if (currentStage > 1) {
       setCurrentStage(prev => prev - 1);
+      window.scrollTo(0, 0);
     }
   };
 
-  // Final submission
   const handleFinalSubmit = async () => {
     setIsLoading(true);
     setStageErrors({});
     
     try {
       if (!user || !session) {
-        setStageErrors(prev => ({ 
-          ...prev, 
-          submission: 'You must be logged in to register. Redirecting to signup...' 
-        }));
+        setStageErrors(prev => ({ ...prev, submission: 'Please log in to continue.' }));
         setTimeout(() => navigate('/signup'), 2000);
         return;
       }
 
-      console.log('📝 Starting registration process...');
-      console.log('User:', user.email);
+      // Get or create profile
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
 
-      const formData = new FormData();
-      
+      let profileId;
+
+      if (existingProfile) {
+        profileId = existingProfile.id;
+      } else {
+        const { data: newProfile, error: createProfileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: user.id,
+            email: studentInfo.email,
+            full_name: studentInfo.full_name,
+            phone: studentInfo.phone,
+            role: 'student',
+          }])
+          .select('id')
+          .single();
+
+        if (createProfileError) throw createProfileError;
+        profileId = newProfile.id;
+      }
+
+      // Prepare registration data
       const registrationData = {
+        user_id: user.id,
+        profile_id: profileId,
         full_name: studentInfo.full_name,
         student_number: studentInfo.student_number,
         email: studentInfo.email,
         phone: studentInfo.phone,
-        birth_date: studentInfo.birth_date,
+        birth_date: studentInfo.birth_date || null,
         gender: studentInfo.gender,
-        grade_level: 'Grade 11',
         class_type: studentInfo.class_type,
         subjects: selectedSubjects,
         payment_method: paymentInfo.payment_method,
         payment_number: paymentInfo.payment_number,
-        payer_name: paymentInfo.payer_name
+        payer_name: paymentInfo.payer_name,
+        payment_screenshot_url: paymentInfo.screenshotUrl || null,
+        registration_status: 'pending',
+        total_amount: calculateTotal(),
       };
 
-      formData.append('data', JSON.stringify(registrationData));
-      
-      if (paymentInfo.screenshot) {
-        formData.append('paymentProof', paymentInfo.screenshot);
-        console.log('📸 Payment screenshot attached');
+      // Check if registration already exists
+      const { data: existingReg } = await supabase
+        .from('student_registrations')
+        .select('id, registration_status')
+        .eq('user_id', user.id)
+        .single();
+
+      if (existingReg) {
+        if (existingReg.registration_status !== 'pending') {
+          throw new Error('Cannot modify a registration that has already been processed.');
+        }
+        
+        const { error } = await supabase
+          .from('student_registrations')
+          .update(registrationData)
+          .eq('id', existingReg.id)
+          .eq('registration_status', 'pending');
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('student_registrations')
+          .insert([registrationData]);
+
+        if (error) throw error;
       }
 
-      console.log('📡 Sending to backend...');
-
-      const response = await axios.post(
-        'http://localhost:5000/api/complete-registration',
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'multipart/form-data'
-          },
-          timeout: 30000
-        }
-      );
-
-      console.log('✅ Registration successful!');
-      console.log('Response:', response.data);
-
-      setShowSuccess(true);
-
-    } catch (error) {
-      console.error('❌ Registration error details:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method
+      // Update user metadata
+      await supabase.auth.updateUser({
+        data: {
+          is_registered: true,
+          student_number: studentInfo.student_number,
+          registration_status: 'pending'
         }
       });
+
+      setShowSuccess(true);
+    } catch (error) {
+      console.error('Registration error:', error);
       
-      if (error.response) {
-        const errorMsg = error.response.data?.error || 
-                        error.response.data?.message || 
-                        'Registration failed';
-        setStageErrors(prev => ({ 
-          ...prev, 
-          submission: errorMsg 
-        }));
-      } else if (error.request) {
-        setStageErrors(prev => ({ 
-          ...prev, 
-          submission: 'No response from server. Please check your connection.' 
-        }));
+      if (error.code === '23505') {
+        setStageErrors(prev => ({ ...prev, submission: 'This student number is already registered.' }));
       } else {
-        setStageErrors(prev => ({ 
-          ...prev, 
-          submission: error.message || 'Registration failed' 
-        }));
+        setStageErrors(prev => ({ ...prev, submission: error.message || 'Registration failed. Please try again.' }));
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading while checking auth
   if (isAuthLoading) {
     return (
-      <div className="njec-loading-container">
-        <div className="njec-loading-spinner">
-          <div className="njec-loading-circle"></div>
-          <div className="njec-loading-circle"></div>
-          <div className="njec-loading-circle"></div>
-        </div>
+      <div className="reg-loading">
+        <div className="reg-spinner"></div>
         <p>Loading your information...</p>
       </div>
     );
   }
 
-  // Show message if no user
   if (!user) {
     return (
-      <div className="njec-error-container">
+      <div className="reg-error">
         <AlertCircle size={48} />
         <h3>Not Authenticated</h3>
         <p>Please sign up or log in to continue.</p>
-        <button onClick={() => navigate('/signup')} className="njec-btn njec-btn-primary">
+        <button onClick={() => navigate('/signup')} className="reg-btn reg-btn-primary">
           Go to Sign Up
         </button>
       </div>
     );
   }
 
-  // Loading Spinner Component
-  const LoadingSpinner = () => (
-    <div className="njec-spinner-container">
-      <div className="njec-spinner">
-        <div className="njec-spinner-inner">
-          <div className="njec-spinner-dot"></div>
-          <div className="njec-spinner-dot"></div>
-          <div className="njec-spinner-dot"></div>
-          <div className="njec-spinner-dot"></div>
-        </div>
-      </div>
-      <p className="njec-spinner-text">Processing...</p>
-    </div>
-  );
-
-  // Feature Card Component
-  const FeatureCard = ({ icon: Icon, title, description, gradient, delay }) => (
-    <div 
-      className="njec-feature-card" 
-      style={{ 
-        animationDelay: `${delay}s`
-      }}
-    >
-      <div className="njec-feature-icon" style={{ background: gradient }}>
-        <Icon size={28} />
-      </div>
-      <div className="njec-feature-content">
-        <h4 className="njec-feature-title">{title}</h4>
-        <p className="njec-feature-description">{description}</p>
-      </div>
-    </div>
-  );
-
-  // Subject Card Component
-  const SubjectCard = ({ subject, isSelected, onSelect }) => (
-    <div 
-      className={`njec-subject-card ${isSelected ? 'njec-subject-selected' : ''}`}
-      onClick={() => onSelect(subject.id)}
-      style={{ animationDelay: '0.05s' }}
-    >
-      <div className="njec-subject-card-content">
-        <div className="njec-subject-icon" style={{ background: subject.color }}>
-          <span className="njec-subject-icon-text">{subject.icon}</span>
-        </div>
-        <div className="njec-subject-info">
-          <div className="njec-subject-header">
-            <h4 className="njec-subject-name">{subject.name}</h4>
-            <div className="njec-subject-checkbox">
-              {isSelected ? (
-                <CheckCircle size={18} className="njec-check-icon" />
-              ) : (
-                <div className="njec-checkbox-empty"></div>
-              )}
-            </div>
-          </div>
-          <p className="njec-subject-description">{subject.description}</p>
-          <div className="njec-subject-footer">
-            <div className="njec-subject-price">
-              <span>M{subject.price.toLocaleString()}</span>
-            </div>
-            <div className="njec-subject-badge">
-              {subject.price >= 360 ? 'Premium' : 'Standard'}
-            </div>
+  return (
+    <div className="reg-container">
+      {/* Header */}
+      <div className="reg-header">
+        <div className="reg-logo">
+          <img src={Logo} alt="NJEC" />
+          <div>
+            <h2>NJEC Registration</h2>
+            <p>Complete your registration in 3 easy steps</p>
           </div>
         </div>
       </div>
-    </div>
-  );
 
-  // Render stage 1: Student Information
-  const renderStage1 = () => (
-    <div className="njec-stage-content">
-      <div className="njec-stage-header">
-        <div className="njec-stage-icon animated-gradient">
-          <User size={32} />
+      {/* Progress Bar */}
+      <div className="reg-progress-container">
+        <div className="reg-progress-steps">
+          {[1, 2, 3].map(step => (
+            <div key={step} className={`reg-step ${currentStage >= step ? 'active' : ''} ${currentStage > step ? 'completed' : ''}`}>
+              <div className="reg-step-circle">
+                {currentStage > step ? <Check size={16} /> : step}
+              </div>
+              <span>{step === 1 ? 'Info' : step === 2 ? 'Subjects' : 'Payment'}</span>
+            </div>
+          ))}
         </div>
-        <div className="njec-stage-header-text">
-          <h3 className="njec-stage-title">Student Information</h3>
-          <p className="njec-stage-subtitle">Please provide your personal details to complete registration</p>
-          {user && <p className="njec-user-info">Logged in as: {user.email}</p>}
+        <div className="reg-progress-bar">
+          <div className="reg-progress-fill" style={{ width: `${(currentStage / 3) * 100}%` }}></div>
         </div>
       </div>
 
-      <div className="njec-form-grid-2x2">
-        <div className="njec-form-row">
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <User size={18} />
-              Full Name *
-            </label>
-            <div className="njec-input-container">
-              <input
-                type="text"
-                name="full_name"
-                value={studentInfo.full_name}
-                onChange={handleStudentInfoChange}
-                className={`njec-form-input ${errors.full_name ? 'njec-input-error' : ''}`}
-                placeholder="Enter your full name"
-              />
-              {errors.full_name && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.full_name}</span>
+      {/* Main Content */}
+      <div className="reg-main">
+        <div className="reg-card">
+          {/* Stage 1: Student Information */}
+          {currentStage === 1 && (
+            <div className="reg-stage">
+              <h3><User size={20} /> Student Information</h3>
+              <p className="reg-stage-desc">Please provide your personal details</p>
+              
+              <div className="reg-form-grid">
+                <div className="reg-field">
+                  <label><User size={14} /> Full Name *</label>
+                  <input
+                    type="text"
+                    name="full_name"
+                    value={studentInfo.full_name}
+                    onChange={handleStudentInfoChange}
+                    className={errors.full_name ? 'error' : ''}
+                    placeholder="Enter your full name"
+                  />
+                  {errors.full_name && <span className="reg-error-text">{errors.full_name}</span>}
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <Hash size={18} />
-              Student Number *
-            </label>
-            <div className="njec-input-container">
-              <input
-                type="text"
-                name="student_number"
-                value={studentInfo.student_number}
-                onChange={handleStudentInfoChange}
-                className={`njec-form-input ${errors.student_number ? 'njec-input-error' : ''}`}
-                placeholder="202400123"
-                maxLength="9"
-              />
-              {errors.student_number && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.student_number}</span>
+                <div className="reg-field">
+                  <label><Mail size={14} /> Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={studentInfo.email}
+                    readOnly
+                    className="readonly"
+                  />
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        <div className="njec-form-row">
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <Mail size={18} />
-              Email Address *
-            </label>
-            <div className="njec-input-container">
-              <input
-                type="email"
-                name="email"
-                value={studentInfo.email}
-                onChange={handleStudentInfoChange}
-                className={`njec-form-input ${errors.email ? 'njec-input-error' : ''}`}
-                placeholder="student@example.com"
-                readOnly
-              />
-              {errors.email && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.email}</span>
+                <div className="reg-field">
+                  <label><Hash size={14} /> Student Number *</label>
+                  <input
+                    type="text"
+                    name="student_number"
+                    value={studentInfo.student_number}
+                    onChange={handleStudentInfoChange}
+                    className={errors.student_number ? 'error' : ''}
+                    placeholder="202400123"
+                    maxLength="9"
+                  />
+                  {errors.student_number && <span className="reg-error-text">{errors.student_number}</span>}
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <PhoneCall size={18} />
-              Phone Number *
-            </label>
-            <div className="njec-input-container">
-              <input
-                type="tel"
-                name="phone"
-                value={studentInfo.phone}
-                onChange={handleStudentInfoChange}
-                className={`njec-form-input ${errors.phone ? 'njec-input-error' : ''}`}
-                placeholder="+266 5012 3456"
-              />
-              {errors.phone && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.phone}</span>
+                <div className="reg-field">
+                  <label><PhoneCall size={14} /> Phone Number *</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={studentInfo.phone}
+                    onChange={handleStudentInfoChange}
+                    className={errors.phone ? 'error' : ''}
+                    placeholder="+266 5012 3456"
+                  />
+                  {errors.phone && <span className="reg-error-text">{errors.phone}</span>}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        <div className="njec-form-row">
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <Calendar size={18} />
-              Date of Birth *
-            </label>
-            <div className="njec-input-container">
-              <input
-                type="date"
-                name="birth_date"
-                value={studentInfo.birth_date}
-                onChange={handleStudentInfoChange}
-                className={`njec-form-input ${errors.birth_date ? 'njec-input-error' : ''}`}
-              />
-              {errors.birth_date && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.birth_date}</span>
+                <div className="reg-field">
+                  <label><Calendar size={14} /> Date of Birth *</label>
+                  <input
+                    type="date"
+                    name="birth_date"
+                    value={studentInfo.birth_date}
+                    onChange={handleStudentInfoChange}
+                    className={errors.birth_date ? 'error' : ''}
+                  />
+                  {errors.birth_date && <span className="reg-error-text">{errors.birth_date}</span>}
                 </div>
-              )}
-            </div>
-          </div>
 
-          <div className="njec-form-group">
-            <label className="njec-form-label">
-              <User size={18} />
-              Gender *
-            </label>
-            <select
-              name="gender"
-              value={studentInfo.gender}
-              onChange={handleStudentInfoChange}
-              className="njec-form-select"
-            >
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            <p className="njec-field-hint">Note: Only Male/Female accepted by system</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="njec-form-group njec-full-width">
-        <label className="njec-form-label">
-          <GraduationCap size={18} />
-          Class Type *
-        </label>
-        <div className="njec-radio-group-2x">
-          <label className="njec-radio-label">
-            <input
-              type="radio"
-              name="class_type"
-              value="extra"
-              checked={studentInfo.class_type === 'extra'}
-              onChange={handleStudentInfoChange}
-              className="njec-radio-input"
-            />
-            <span className="njec-radio-custom"></span>
-            <span className="njec-radio-text">
-              <span className="njec-radio-title">Extra Classes</span>
-              <span className="njec-radio-description">Additional learning support</span>
-            </span>
-          </label>
-          <label className="njec-radio-label">
-            <input
-              type="radio"
-              name="class_type"
-              value="supplementary"
-              checked={studentInfo.class_type === 'supplementary'}
-              onChange={handleStudentInfoChange}
-              className="njec-radio-input"
-            />
-            <span className="njec-radio-custom"></span>
-            <span className="njec-radio-text">
-              <span className="njec-radio-title">Supplementary Classes</span>
-              <span className="njec-radio-description">Remedial learning support</span>
-            </span>
-          </label>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render stage 2: Subject Selection - All treated equally
-  const renderStage2 = () => (
-    <div className="njec-stage-content">
-      <div className="njec-stage-header">
-        <div className="njec-stage-icon animated-gradient">
-          <BookOpen size={32} />
-        </div>
-        <div className="njec-stage-header-text">
-          <h3 className="njec-stage-title">Subject Selection</h3>
-          <p className="njec-stage-subtitle">Choose your subjects. Select at least one to continue. All subjects are M180 except Physical Science (M360)</p>
-        </div>
-      </div>
-
-      {errors.subjects && (
-        <div className="njec-error-alert">
-          <AlertCircle size={20} />
-          <span>{errors.subjects}</span>
-        </div>
-      )}
-
-      {/* All subjects in one grid - treated equally */}
-      <div className="njec-subjects-grid-3x3">
-        {subjects.map((subject, index) => (
-          <SubjectCard
-            key={subject.id}
-            subject={subject}
-            isSelected={selectedSubjects.includes(subject.id)}
-            onSelect={toggleSubject}
-          />
-        ))}
-      </div>
-
-      <div className="njec-total-summary">
-        <div className="njec-summary-header">
-          <h4 className="njec-summary-title">Registration Summary</h4>
-          <div className="njec-summary-badge">
-            <BookOpen size={16} />
-            <span>{selectedSubjects.length} Subject{selectedSubjects.length !== 1 ? 's' : ''}</span>
-          </div>
-        </div>
-        <div className="njec-summary-details">
-          <div className="njec-summary-item">
-            <span className="njec-summary-label">Selected Subjects</span>
-            <span className="njec-summary-value">{selectedSubjects.length}</span>
-          </div>
-          <div className="njec-summary-item">
-            <span className="njec-summary-label">Total Amount</span>
-            <span className="njec-summary-value njec-total-amount">M{calculateTotal().toLocaleString()}</span>
-          </div>
-          <div className="njec-summary-footer">
-            <div className="njec-summary-note">
-              <Info size={16} />
-              <span>All prices include study materials and resources</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render stage 3: Payment Information
-  const renderStage3 = () => (
-    <div className="njec-stage-content">
-      <div className="njec-stage-header">
-        <div className="njec-stage-icon animated-gradient">
-          <CreditCard size={32} />
-        </div>
-        <div className="njec-stage-header-text">
-          <h3 className="njec-stage-title">Payment Verification</h3>
-          <p className="njec-stage-subtitle">Complete your payment and upload proof for verification</p>
-        </div>
-      </div>
-
-      <div className="njec-payment-section">
-        <div className="njec-payment-methods">
-          <h4 className="njec-section-title">
-            <Wallet size={20} />
-            Select Payment Method
-          </h4>
-          <div className="njec-payment-options-2x">
-            <label className="njec-payment-option">
-              <input
-                type="radio"
-                name="payment_method"
-                value="mpesa"
-                checked={paymentInfo.payment_method === 'mpesa'}
-                onChange={handlePaymentInfoChange}
-                className="njec-payment-radio"
-              />
-              <div className="njec-payment-option-content">
-                <div className="njec-payment-icon">
-                  <Phone size={24} />
+                <div className="reg-field">
+                  <label><User size={14} /> Gender *</label>
+                  <select name="gender" value={studentInfo.gender} onChange={handleStudentInfoChange}>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
                 </div>
-                <div className="njec-payment-info">
-                  <h5>M-Pesa</h5>
-                  <p>Send to: 5012 3456</p>
-                  <div className="njec-payment-reference">
-                    <span>Reference:</span>
-                    <code>{studentInfo.student_number || 'STUDENT#'}</code>
+
+                <div className="reg-field reg-full">
+                  <label><GraduationCap size={14} /> Class Type *</label>
+                  <div className="reg-radio-group">
+                    <label className={`reg-radio ${studentInfo.class_type === 'extra' ? 'active' : ''}`}>
+                      <input
+                        type="radio"
+                        name="class_type"
+                        value="extra"
+                        checked={studentInfo.class_type === 'extra'}
+                        onChange={handleStudentInfoChange}
+                      />
+                      <span>Extra Classes</span>
+                    </label>
+                    <label className={`reg-radio ${studentInfo.class_type === 'supplementary' ? 'active' : ''}`}>
+                      <input
+                        type="radio"
+                        name="class_type"
+                        value="supplementary"
+                        checked={studentInfo.class_type === 'supplementary'}
+                        onChange={handleStudentInfoChange}
+                      />
+                      <span>Supplementary Classes</span>
+                    </label>
                   </div>
                 </div>
               </div>
-            </label>
+            </div>
+          )}
 
-            <label className="njec-payment-option">
-              <input
-                type="radio"
-                name="payment_method"
-                value="ecocash"
-                checked={paymentInfo.payment_method === 'ecocash'}
-                onChange={handlePaymentInfoChange}
-                className="njec-payment-radio"
-              />
-              <div className="njec-payment-option-content">
-                <div className="njec-payment-icon">
-                  <Wallet size={24} />
+          {/* Stage 2: Subject Selection */}
+          {currentStage === 2 && (
+            <div className="reg-stage">
+              <h3><BookOpen size={20} /> Select Subjects</h3>
+              <p className="reg-stage-desc">Choose at least one subject to continue</p>
+              
+              {errors.subjects && (
+                <div className="reg-alert-error">
+                  <AlertCircle size={16} />
+                  <span>{errors.subjects}</span>
                 </div>
-                <div className="njec-payment-info">
-                  <h5>Eco-Cash</h5>
-                  <p>Send to: 6012 3456</p>
-                  <div className="njec-payment-reference">
-                    <span>Reference:</span>
-                    <code>{studentInfo.student_number || 'STUDENT#'}</code>
+              )}
+
+              <div className="reg-subjects-grid">
+                {subjects.map(subject => (
+                  <div
+                    key={subject.id}
+                    className={`reg-subject-card ${selectedSubjects.includes(subject.id) ? 'selected' : ''}`}
+                    onClick={() => toggleSubject(subject.id)}
+                  >
+                    <div className="reg-subject-check">
+                      {selectedSubjects.includes(subject.id) && <Check size={16} />}
+                    </div>
+                    <h4>{subject.name}</h4>
+                    <span className="reg-subject-price">M{subject.price}</span>
                   </div>
+                ))}
+              </div>
+
+              <div className="reg-summary-box">
+                <div className="reg-summary-row">
+                  <span>Selected: {selectedSubjects.length} subject{selectedSubjects.length !== 1 ? 's' : ''}</span>
+                  <strong>Total: M{calculateTotal().toLocaleString()}</strong>
                 </div>
               </div>
-            </label>
-          </div>
-        </div>
+            </div>
+          )}
 
-        <div className="njec-payment-details">
-          <div className="njec-form-grid-2x2">
-            <div className="njec-form-row">
-              <div className="njec-form-group">
-                <label className="njec-form-label">
-                  <Phone size={18} />
-                  Payment Number *
-                </label>
-                <div className="njec-input-container">
+          {/* Stage 3: Payment */}
+          {currentStage === 3 && (
+            <div className="reg-stage">
+              <h3><CreditCard size={20} /> Payment Verification</h3>
+              <p className="reg-stage-desc">Complete payment and upload proof</p>
+
+              <div className="reg-payment-methods">
+                <h4>Payment Method</h4>
+                <div className="reg-radio-group">
+                  <label className={`reg-radio ${paymentInfo.payment_method === 'mpesa' ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="mpesa"
+                      checked={paymentInfo.payment_method === 'mpesa'}
+                      onChange={handlePaymentInfoChange}
+                    />
+                    <span>M-Pesa (5012 3456)</span>
+                  </label>
+                  <label className={`reg-radio ${paymentInfo.payment_method === 'ecocash' ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="ecocash"
+                      checked={paymentInfo.payment_method === 'ecocash'}
+                      onChange={handlePaymentInfoChange}
+                    />
+                    <span>Eco-Cash (6012 3456)</span>
+                  </label>
+                </div>
+                <p className="reg-reference">Reference: <code>{studentInfo.student_number || 'STUDENT#'}</code></p>
+              </div>
+
+              <div className="reg-form-grid">
+                <div className="reg-field">
+                  <label><Phone size={14} /> Payment Number *</label>
                   <input
                     type="text"
                     name="payment_number"
                     value={paymentInfo.payment_number}
                     onChange={handlePaymentInfoChange}
-                    className={`njec-form-input ${errors.payment_number ? 'njec-input-error' : ''}`}
-                    placeholder="Phone number used for payment"
+                    className={errors.payment_number ? 'error' : ''}
+                    placeholder="Phone number used"
                   />
-                  {errors.payment_number && (
-                    <div className="njec-error-message">
-                      <AlertCircle size={14} />
-                      <span>{errors.payment_number}</span>
-                    </div>
-                  )}
+                  {errors.payment_number && <span className="reg-error-text">{errors.payment_number}</span>}
                 </div>
-              </div>
 
-              <div className="njec-form-group">
-                <label className="njec-form-label">
-                  <User size={18} />
-                  Payer Name *
-                </label>
-                <div className="njec-input-container">
+                <div className="reg-field">
+                  <label><User size={14} /> Payer Name *</label>
                   <input
                     type="text"
                     name="payer_name"
                     value={paymentInfo.payer_name}
                     onChange={handlePaymentInfoChange}
-                    className={`njec-form-input ${errors.payer_name ? 'njec-input-error' : ''}`}
-                    placeholder="Name as shown on payment"
+                    className={errors.payer_name ? 'error' : ''}
+                    placeholder="Name on payment"
                   />
-                  {errors.payer_name && (
-                    <div className="njec-error-message">
-                      <AlertCircle size={14} />
-                      <span>{errors.payer_name}</span>
-                    </div>
-                  )}
+                  {errors.payer_name && <span className="reg-error-text">{errors.payer_name}</span>}
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Upload Section with Loading and Success States */}
-          <div className="njec-form-group njec-full-width">
-            <label className="njec-form-label">
-              <Upload size={18} />
-              Payment Proof *
-            </label>
-            <div className="njec-upload-container">
-              {/* Upload Area - Hidden when preview is shown or uploading */}
-              {!paymentInfo.screenshotPreview && !isUploading && (
-                <div className="njec-upload-area">
-                  <input
-                    type="file"
-                    id="screenshot-upload"
-                    accept="image/*"
-                    onChange={handleScreenshotUpload}
-                    className="njec-upload-input"
-                    disabled={isUploading}
-                  />
-                  <label htmlFor="screenshot-upload" className="njec-upload-label">
-                    <div className="njec-upload-icon">
-                      <Camera size={40} />
-                    </div>
-                    <div className="njec-upload-text">
-                      <h5>Upload Payment Screenshot</h5>
-                      <p>Drag & drop or click to upload your payment confirmation</p>
-                      <p className="njec-upload-note">Supports: JPEG, PNG, JPG (Max 5MB)</p>
-                    </div>
-                  </label>
-                </div>
-              )}
-              
-              {/* Loading State */}
-              {isUploading && (
-                <div className="njec-upload-area njec-upload-loading">
-                  <div className="njec-upload-loading-content">
-                    <div className="njec-upload-spinner">
-                      <div className="njec-spinner-circle"></div>
-                      <div className="njec-spinner-circle"></div>
-                      <div className="njec-spinner-circle"></div>
-                    </div>
-                    <h5 className="njec-upload-loading-title">Uploading Screenshot...</h5>
-                    <p className="njec-upload-loading-text">Please wait while we process your file</p>
-                    <div className="njec-upload-progress-bar">
-                      <div className="njec-upload-progress-fill"></div>
-                    </div>
+              <div className="reg-upload-section">
+                <label>Payment Screenshot *</label>
+                {!paymentInfo.screenshotPreview && !isUploading && (
+                  <div className="reg-upload-area">
+                    <input
+                      type="file"
+                      id="screenshot"
+                      accept="image/*"
+                      onChange={handleScreenshotUpload}
+                      disabled={isUploading}
+                    />
+                    <label htmlFor="screenshot" className="reg-upload-label">
+                      <Camera size={32} />
+                      <span>Click to upload payment proof</span>
+                      <small>JPEG, PNG, JPG (Max 5MB)</small>
+                    </label>
                   </div>
-                </div>
-              )}
-              
-              {/* Screenshot Preview with Red X Button */}
-              {paymentInfo.screenshotPreview && (
-                <div className="njec-screenshot-preview">
-                  <div className="njec-screenshot-header">
-                    <div className="njec-screenshot-header-left">
-                      <CheckCircle size={18} className="njec-screenshot-success-icon" />
-                      <span className="njec-screenshot-title">Payment Proof Uploaded</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveScreenshot}
-                      className="njec-remove-screenshot"
-                      aria-label="Remove screenshot"
-                      title="Remove screenshot"
-                    >
-                      <X size={18} />
-                    </button>
+                )}
+
+                {isUploading && (
+                  <div className="reg-upload-loading">
+                    <div className="reg-spinner"></div>
+                    <span>Uploading...</span>
                   </div>
-                  <img 
-                    src={paymentInfo.screenshotPreview} 
-                    alt="Payment proof" 
-                    className="njec-screenshot-image"
-                  />
-                </div>
-              )}
-              
-              {/* Success Message */}
-              {uploadSuccess && (
-                <div className="njec-upload-success-message">
-                  <CheckCircle size={16} />
-                  <span>Screenshot uploaded successfully!</span>
-                </div>
-              )}
-              
-              {/* Error Message */}
-              {errors.screenshot && (
-                <div className="njec-error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.screenshot}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+                )}
 
-      <div className="njec-final-summary">
-        <div className="njec-summary-grid-2x2">
-          <div className="njec-summary-card summary-highlight">
-            <div className="njec-summary-card-header">
-              <FileCheck size={24} />
-              <h4>Registration Details</h4>
-            </div>
-            <div className="njec-summary-card-content">
-              <div className="njec-summary-row">
-                <span>Student Number</span>
-                <strong>{studentInfo.student_number || 'Not provided'}</strong>
-              </div>
-              <div className="njec-summary-row">
-                <span>Total Subjects</span>
-                <strong>{selectedSubjects.length}</strong>
-              </div>
-            </div>
-          </div>
+                {paymentInfo.screenshotPreview && (
+                  <div className="reg-preview">
+                    <div className="reg-preview-header">
+                      <CheckCircle size={16} className="reg-success-icon" />
+                      <span>Uploaded successfully</span>
+                      <button onClick={handleRemoveScreenshot} className="reg-remove-btn">
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <img src={paymentInfo.screenshotPreview} alt="Payment proof" />
+                  </div>
+                )}
 
-          <div className="njec-summary-card summary-highlight">
-            <div className="njec-summary-card-header">
-              <CreditCard size={24} />
-              <h4>Payment Details</h4>
-            </div>
-            <div className="njec-summary-card-content">
-              <div className="njec-summary-row">
-                <span>Payment Method</span>
-                <span className="njec-payment-badge">
-                  {paymentInfo.payment_method === 'mpesa' ? 'M-Pesa' : 'Eco-Cash'}
-                </span>
+                {errors.screenshot && <span className="reg-error-text">{errors.screenshot}</span>}
               </div>
-              <div className="njec-summary-row">
-                <span>Payer Name</span>
-                <strong>{paymentInfo.payer_name || 'Not provided'}</strong>
-              </div>
-            </div>
-          </div>
 
-          <div className="njec-summary-card total-card" style={{ gridColumn: '1 / -1' }}>
-            <div className="njec-summary-card-content">
-              <div className="njec-total-display">
-                <div className="njec-total-label">
-                  <span>M</span>
+              <div className="reg-summary-box">
+                <div className="reg-summary-row">
                   <span>Total Amount Due</span>
+                  <strong>M{calculateTotal().toLocaleString()}</strong>
                 </div>
-                <div className="njec-total-amount">
-                  M{calculateTotal().toLocaleString()}
-                </div>
-              </div>
-              <div className="njec-summary-note">
-                <Info size={16} />
-                <span>Payment confirmation may take 24-48 hours to process</span>
               </div>
             </div>
+          )}
+
+          {/* Error */}
+          {stageErrors.submission && (
+            <div className="reg-alert-error">
+              <AlertCircle size={16} />
+              <span>{stageErrors.submission}</span>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="reg-navigation">
+            {currentStage > 1 ? (
+              <button onClick={goToPreviousStage} className="reg-btn reg-btn-secondary" disabled={isLoading}>
+                <ArrowLeft size={18} />
+                Back
+              </button>
+            ) : (
+              <div></div>
+            )}
+            
+            <button onClick={goToNextStage} className="reg-btn reg-btn-primary" disabled={isLoading}>
+              {isLoading ? (
+                'Processing...'
+              ) : (
+                <>
+                  {currentStage === 3 ? 'Complete Registration' : 'Continue'}
+                  <ChevronRight size={18} />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  );
 
-  // Success Modal
-  const SuccessModal = () => (
-    <div className="njec-modal-overlay">
-      <div className="njec-success-modal">
-        <div className="njec-success-icon animated-success">
-          <CheckCircle size={72} />
-        </div>
-        <div className="njec-success-content">
-          <h3 className="njec-success-title">Registration Complete!</h3>
-          <p className="njec-success-message">
-            Your registration has been successfully submitted and is now pending administrative approval.
-            You will receive a confirmation email within 24 hours.
-          </p>
-          
-          <div className="njec-success-grid-2x2">
-            <div className="njec-success-detail">
-              <span className="njec-detail-label">Student Number</span>
-              <span className="njec-detail-value">{studentInfo.student_number}</span>
+      {/* Success Modal */}
+      {showSuccess && (
+        <div className="reg-modal-overlay">
+          <div className="reg-modal">
+            <div className="reg-modal-icon">
+              <CheckCircle size={64} />
             </div>
-            <div className="njec-success-detail">
-              <span className="njec-detail-label">Total Subjects</span>
-              <span className="njec-detail-value">{selectedSubjects.length}</span>
+            <h2>Registration Complete!</h2>
+            <p>Your registration has been submitted and is pending approval. You will be notified once it's reviewed.</p>
+            <div className="reg-modal-details">
+              <div><span>Student Number:</span> <strong>{studentInfo.student_number}</strong></div>
+              <div><span>Subjects:</span> <strong>{selectedSubjects.length}</strong></div>
+              <div><span>Total:</span> <strong>M{calculateTotal().toLocaleString()}</strong></div>
+              <div><span>Status:</span> <span className="reg-status-pending"><Clock size={14} /> Pending Approval</span></div>
             </div>
-            <div className="njec-success-detail">
-              <span className="njec-detail-label">Total Amount</span>
-              <span className="njec-detail-value">M{calculateTotal().toLocaleString()}</span>
-            </div>
-            <div className="njec-success-detail">
-              <span className="njec-detail-label">Current Status</span>
-              <span className="njec-status-badge">
-                <Clock size={14} />
-                Pending Approval
-              </span>
-            </div>
-          </div>
-
-          <div className="njec-success-actions">
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                setStudentInfo({
-                  full_name: '',
-                  student_number: '',
-                  email: '',
-                  phone: '',
-                  birth_date: '',
-                  gender: 'Male',
-                  class_type: 'extra',
-                });
-                setSelectedSubjects([]);
-                setPaymentInfo({
-                  payment_method: 'mpesa',
-                  payment_number: '',
-                  payer_name: '',
-                  screenshot: null,
-                  screenshotPreview: null,
-                });
-                setCurrentStage(1);
-                setErrors({});
-              }}
-              className="njec-btn njec-btn-primary"
-            >
-              Register Another Student
-            </button>
-            <button
-              onClick={() => {
-                setShowSuccess(false);
-                navigate('/studentdashboard');
-              }}
-              className="njec-btn njec-btn-outline"
-            >
+            <button onClick={() => { setShowSuccess(false); navigate('/studentdashboard'); }} className="reg-btn reg-btn-primary">
               Go to Dashboard
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  );
+      )}
 
-  // Feature cards data
-  const features = [
-    { icon: Shield, title: 'Secure & Encrypted', description: 'Bank-level security for all your data', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-    { icon: Award, title: 'Quality Education', description: 'Certified instructors & modern curriculum', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-    { icon: Users, title: 'Student Support', description: '24/7 academic support available', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-    { icon: TrendingUp, title: 'Proven Results', description: '95% student satisfaction rate', gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
-    { icon: Target, title: 'Focused Learning', description: 'Personalized study plans for each student', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-    { icon: Zap, title: 'Quick Progress', description: 'Accelerated learning techniques', gradient: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)' },
-  ];
-
-  return (
-    <div className="njec-registration-container">
-      <div className="njec-animated-bg">
-        <div className="njec-bg-shape njec-bg-shape-1"></div>
-        <div className="njec-bg-shape njec-bg-shape-2"></div>
-        <div className="njec-bg-shape njec-bg-shape-3"></div>
-        <div className="njec-bg-shape njec-bg-shape-4"></div>
-      </div>
-
-      <div className="njec-grid-container">
-        
-        <div className="njec-grid-header">
-          <div className="njec-logo-section">
-            <div className="njec-logo-wrapper">
-              <img src={Logo} alt="NJEC Logo" className="njec-logo" />
-              <div className="njec-logo-text">
-                <h2 className="njec-logo-title">NJEC</h2>
-                <p className="njec-logo-subtitle">New Jerusalem Extra Classes</p>
-              </div>
-            </div>
-          </div>
-          <div className="njec-header-content">
-            <h1 className="njec-main-title">Grade 11 Registration Portal</h1>
-            <p className="njec-main-subtitle">
-              Complete your registration in three simple steps. All fields marked with * are required.
-            </p>
-          </div>
-        </div>
-
-        <div className="njec-main-grid-2x2">
-          
-          <div className="njec-grid-section progress-section">
-            <div className="njec-progress-section">
-              <div className="njec-progress-header">
-                <h3 className="njec-progress-title">Registration Progress</h3>
-                <span className="njec-progress-percentage">{progressPercentage.toFixed(0)}%</span>
-              </div>
-              <div className="njec-progress-bar">
-                <div 
-                  className="njec-progress-fill" 
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
-              </div>
-              
-              <div className="njec-steps">
-                {[1, 2, 3].map(step => (
-                  <div 
-                    key={step} 
-                    className={`njec-step ${currentStage === step ? 'njec-step-active' : ''} ${currentStage > step ? 'njec-step-completed' : ''}`}
-                  >
-                    <div className="njec-step-indicator">
-                      <div className="njec-step-circle">
-                        {currentStage > step ? (
-                          <Check size={16} />
-                        ) : (
-                          <span>{step}</span>
-                        )}
-                      </div>
-                      {step < 3 && <div className="njec-step-connector"></div>}
-                    </div>
-                    <div className="njec-step-content">
-                      <div className="njec-step-number">Step {step}</div>
-                      <div className="njec-step-name">
-                        {step === 1 && 'Student Info'}
-                        {step === 2 && 'Subjects'}
-                        {step === 3 && 'Payment'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="njec-current-stage">
-              <div className="njec-stage-indicator">
-                <div className="njec-stage-badge">
-                  <Sparkles size={16} />
-                  <span>Current Step</span>
-                </div>
-                <h4 className="njec-stage-name">
-                  {currentStage === 1 && 'Student Information'}
-                  {currentStage === 2 && 'Subject Selection'}
-                  {currentStage === 3 && 'Payment Verification'}
-                </h4>
-              </div>
-              <div className="njec-stage-help">
-                <Lock size={16} />
-                <span>Your information is protected with 256-bit encryption</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="njec-grid-section form-section">
-            <div className="njec-form-container">
-              {currentStage === 1 && renderStage1()}
-              {currentStage === 2 && renderStage2()}
-              {currentStage === 3 && renderStage3()}
-
-              {stageErrors.submission && (
-                <div className="njec-submission-error">
-                  <AlertCircle size={20} />
-                  <span>{stageErrors.submission}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="njec-grid-section navigation-section">
-            <div className="njec-navigation-buttons">
-              <div className="njec-nav-left">
-                {currentStage > 1 && (
-                  <button
-                    type="button"
-                    onClick={goToPreviousStage}
-                    className="njec-btn njec-btn-secondary"
-                    disabled={isLoading}
-                  >
-                    <ArrowLeft size={20} />
-                    <span>Previous</span>
-                  </button>
-                )}
-              </div>
-              
-              <div className="njec-nav-right">
-                <button
-                  type="button"
-                  onClick={goToNextStage}
-                  className="njec-btn njec-btn-primary"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <LoadingSpinner />
-                  ) : (
-                    <>
-                      <span>
-                        {currentStage === 3 ? 'Complete Registration' : 'Continue'}
-                      </span>
-                      <ChevronRight size={20} />
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="njec-grid-section features-section">
-            <div className="njec-features-grid-2x2">
-              <div className="njec-features-header">
-                <h3 className="njec-features-title">
-                  <Target size={24} />
-                  Why Choose NJEC?
-                </h3>
-                <p className="njec-features-subtitle">Experience excellence in education</p>
-              </div>
-              <div className="njec-features-container-2x2">
-                {features.slice(0, 4).map((feature, index) => (
-                  <FeatureCard
-                    key={index}
-                    icon={feature.icon}
-                    title={feature.title}
-                    description={feature.description}
-                    gradient={feature.gradient}
-                    delay={index * 0.1}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-        </div>   
-      </div>
-
+      {/* Loading Overlay */}
       {isLoading && (
-        <div className="njec-loading-overlay">
-          <div className="njec-loading-modal">
-            <div className="njec-loading-spinner">
-              <div className="njec-loading-circle"></div>
-              <div className="njec-loading-circle"></div>
-              <div className="njec-loading-circle"></div>
-            </div>
-            <div className="njec-loading-content">
-              <h3 className="njec-loading-title">Submitting Registration</h3>
-              <p className="njec-loading-text">Please wait while we process your information...</p>
-              <div className="njec-loading-progress">
-                <div className="njec-loading-progress-bar"></div>
-              </div>
-            </div>
+        <div className="reg-modal-overlay">
+          <div className="reg-modal">
+            <div className="reg-spinner-lg"></div>
+            <h3>Submitting Registration...</h3>
+            <p>Please wait while we process your information</p>
           </div>
         </div>
       )}
-
-      {showSuccess && <SuccessModal />}
     </div>
   );
 };
