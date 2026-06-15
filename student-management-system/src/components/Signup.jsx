@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Mail, ArrowRight, AlertCircle, Lock,
   User, Shield, Eye, EyeOff, Sparkles,
@@ -14,12 +14,10 @@ import '../styles/signup.css';
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
-  const [signUpMethod, setSignUpMethod] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1); // 1 = Role Selection, 2 = Sign Up Form
   
   // Selected role
   const [selectedRole, setSelectedRole] = useState(null);
@@ -36,6 +34,9 @@ const SignUp = () => {
   // Validation errors
   const [errors, setErrors] = useState({});
 
+  // Add this state for sign up method
+  const [signUpMethod, setSignUpMethod] = useState(null);
+
   // Roles data
   const roles = [
     {
@@ -44,7 +45,8 @@ const SignUp = () => {
       icon: BookOpen,
       description: 'Access courses, track progress, and learn at your own pace',
       color: '#2563EB',
-      gradient: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)'
+      gradient: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+      tableName: 'students'
     },
     {
       id: 'teacher',
@@ -52,7 +54,8 @@ const SignUp = () => {
       icon: GraduationCap,
       description: 'Create courses, manage students, and share knowledge',
       color: '#059669',
-      gradient: 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+      gradient: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+      tableName: 'teachers'
     },
     {
       id: 'parent',
@@ -60,7 +63,8 @@ const SignUp = () => {
       icon: Users,
       description: 'Monitor your child\'s progress and communicate with teachers',
       color: '#D97706',
-      gradient: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)'
+      gradient: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
+      tableName: 'parents'
     },
     {
       id: 'admin',
@@ -68,114 +72,14 @@ const SignUp = () => {
       icon: UserCog,
       description: 'Manage the platform, users, and oversee operations',
       color: '#4F46E5',
-      gradient: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'
+      gradient: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+      tableName: 'admins'
     }
   ];
 
-  // Check for existing session on mount
-  useEffect(() => {
-    checkUser();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
-      
-      if (event === 'SIGNED_IN' && session && !isRedirecting) {
-        setIsRedirecting(true);
-        handleSuccessfulAuth(session.user);
-      }
-      
-      if (event === 'TOKEN_REFRESHED') {
-        console.log('Token refreshed');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [isRedirecting, selectedRole]);
-
-  const checkUser = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && !isRedirecting) {
-        setIsRedirecting(true);
-        handleSuccessfulAuth(user);
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-    }
-  };
-
-  const handleSuccessfulAuth = async (user) => {
-    try {
-      // If user already has a role, redirect to dashboard
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (profile?.role) {
-        // User already has a role, go to dashboard
-        const routes = {
-          admin: '/admin/dashboard',
-          teacher: '/teacher/dashboard',
-          student: '/student/dashboard',
-          parent: '/parent/dashboard'
-        };
-        navigate(routes[profile.role] || '/student/dashboard', { replace: true });
-        return;
-      }
-
-      // If no role, redirect to role selection
-      const finalRole = selectedRole || 'student';
-      
-      // Update profile with role
-      await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || emailSignUp.fullName || '',
-          role: finalRole,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-
-      // Save to localStorage
-      const userData = {
-        id: user.id,
-        email: user.email,
-        role: finalRole,
-        fullName: user.user_metadata?.full_name || emailSignUp.fullName || ''
-      };
-      localStorage.setItem('user', JSON.stringify(userData));
-
-      // Redirect based on role
-      const routes = {
-        admin: '/admin/dashboard',
-        teacher: '/teacher/dashboard',
-        student: '/student/dashboard',
-        parent: '/parent/dashboard'
-      };
-      
-      navigate(routes[finalRole], { replace: true });
-    } catch (error) {
-      console.error('Error in successful auth:', error);
-      // Fallback to select-role page
-      navigate('/select-role', {
-        state: {
-          userId: user.id,
-          email: user.email,
-          fullName: user.user_metadata?.full_name || ''
-        },
-        replace: true
-      });
-    }
-  };
-
   // Handle Google Sign Up
   const handleGoogleSignUp = async () => {
-    if (isLoading || isRedirecting) return;
+    if (isLoading) return;
     if (!selectedRole) {
       setErrors({ general: 'Please select a role to continue' });
       return;
@@ -185,8 +89,8 @@ const SignUp = () => {
     setErrors({});
     
     try {
-      await supabase.auth.signOut();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Store the selected role in sessionStorage for retrieval after OAuth redirect
+      sessionStorage.setItem('selectedRole', selectedRole);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -205,14 +109,14 @@ const SignUp = () => {
       console.error('Google sign up error:', error);
       setErrors({ general: error.message || 'Failed to sign up with Google. Please try again.' });
       setIsLoading(false);
-      setIsRedirecting(false);
     }
   };
 
   // Handle Email Sign Up
   const handleEmailSignUp = async () => {
-    if (isLoading || isRedirecting) return;
+    if (isLoading) return;
     
+    // Validate all fields
     const newErrors = {};
     
     if (!emailSignUp.fullName.trim()) {
@@ -250,20 +154,23 @@ const SignUp = () => {
     setErrors({});
     
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Step 1: Sign up with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: emailSignUp.email,
         password: emailSignUp.password,
         options: {
           data: {
             full_name: emailSignUp.fullName,
+            role: selectedRole
           },
-          emailRedirectTo: `${window.location.origin}/signup`,
+          emailRedirectTo: `${window.location.origin}/login`,
         }
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
-      if (data?.user?.identities?.length === 0) {
+      // Check if user already exists
+      if (authData?.user?.identities?.length === 0) {
         setErrors({ 
           general: 'An account with this email already exists. Please log in instead.' 
         });
@@ -271,37 +178,82 @@ const SignUp = () => {
         return;
       }
 
-      if (data?.user?.confirmation_sent_at) {
-        setErrors({ 
-          success: '✓ Please check your email to confirm your account. Redirecting...' 
-        });
+      // Step 2: Save to profiles table (common for all roles)
+      if (authData?.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: authData.user.id,
+            email: emailSignUp.email,
+            full_name: emailSignUp.fullName,
+            role: selectedRole,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+        }
+
+        // Step 3: Save to role-specific table
+        const selectedRoleData = roles.find(r => r.id === selectedRole);
         
-        setTimeout(async () => {
-          try {
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-              email: emailSignUp.email,
-              password: emailSignUp.password,
-            });
-            
-            if (!signInError && signInData.user) {
-              handleSuccessfulAuth(signInData.user);
-            } else {
-              navigate('/login', { 
-                state: { 
-                  message: 'Please check your email to confirm your account before logging in.' 
-                } 
-              });
-            }
-          } catch (err) {
+        const roleSpecificData = {
+          id: authData.user.id,
+          email: emailSignUp.email,
+          full_name: emailSignUp.fullName,
+          role: selectedRole,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { error: roleTableError } = await supabase
+          .from(selectedRoleData.tableName)
+          .upsert(roleSpecificData, { onConflict: 'id' });
+
+        if (roleTableError) {
+          console.error(`Error saving to ${selectedRoleData.tableName}:`, roleTableError);
+        }
+
+        // Step 4: Handle email confirmation
+        if (authData?.user?.confirmation_sent_at) {
+          // Email confirmation required
+          setErrors({ 
+            success: `✓ Account created as ${selectedRole}! Please check your email to confirm your account.` 
+          });
+          
+          setTimeout(() => {
             navigate('/login', { 
               state: { 
                 message: 'Please check your email to confirm your account before logging in.' 
               } 
             });
-          }
-        }, 3000);
-      } else {
-        handleSuccessfulAuth(data.user);
+          }, 3000);
+        } else {
+          // Auto sign-in and redirect to appropriate dashboard
+          setErrors({ 
+            success: `✓ Account created as ${selectedRole}! Redirecting to dashboard...` 
+          });
+          
+          setTimeout(async () => {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: emailSignUp.email,
+              password: emailSignUp.password,
+            });
+            
+            if (!signInError) {
+              const routes = {
+                admin: '/admindashboard',
+                teacher: '/teacherdashboard',
+                student: '/studentdashboard',
+                parent: '/parentdashboard'
+              };
+              navigate(routes[selectedRole] || '/studentdashboard', { replace: true });
+            } else {
+              navigate('/login');
+            }
+          }, 2000);
+        }
       }
       
     } catch (error) {
@@ -311,12 +263,12 @@ const SignUp = () => {
     }
   };
 
+  // Rest of your component stays the same...
   const handleLoginClick = (e) => {
     e.preventDefault();
     navigate('/login');
   };
 
-  // Loading Spinner
   const LoadingSpinner = () => (
     <div className="signup-spinner">
       <div className="signup-spinner-dot"></div>
@@ -325,13 +277,12 @@ const SignUp = () => {
     </div>
   );
 
-  // Render Role Selection Step
   const renderRoleSelection = () => (
     <div className="signup-role-section">
       <div className="signup-role-header">
         <h3 className="signup-form-title">Choose Your Role</h3>
         <p className="signup-form-subtitle">
-          Select how you want to use NJEC. You can change this later in settings.
+          Select how you want to use NJEC. This will determine your experience and features.
         </p>
       </div>
 
@@ -391,21 +342,34 @@ const SignUp = () => {
 
       <div className="signup-role-actions">
         <button
-          onClick={() => setSignUpMethod(null)}
+          onClick={() => {
+            if (!selectedRole) {
+              setErrors({ general: 'Please select a role to continue' });
+              return;
+            }
+            setErrors({});
+            setSignUpMethod('email');
+          }}
           className={`signup-btn signup-btn-outline ${!selectedRole ? 'disabled' : ''}`}
-          disabled={!selectedRole}
+          disabled={!selectedRole || isLoading}
         >
-          Continue with Email
           <Mail size={20} />
+          Continue with Email
         </button>
 
         <button
           onClick={handleGoogleSignUp}
           className="signup-btn signup-btn-google"
-          disabled={isLoading || isRedirecting || !selectedRole}
+          disabled={isLoading || !selectedRole}
         >
-          <FcGoogle size={24} />
-          <span>Continue with Google</span>
+          {isLoading ? (
+            <LoadingSpinner />
+          ) : (
+            <>
+              <FcGoogle size={24} />
+              <span>Continue with Google</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -420,7 +384,6 @@ const SignUp = () => {
     </div>
   );
 
-  // Rest of your component remains the same...
   const FeatureCard = ({ icon: Icon, title, description, gradient, delay }) => (
     <div 
       className="signup-feature-card" 
@@ -453,7 +416,6 @@ const SignUp = () => {
 
   return (
     <div className="signup-container">
-      {/* Animated Background */}
       <div className="signup-bg">
         <div className="signup-bg-shape signup-bg-shape-1"></div>
         <div className="signup-bg-shape signup-bg-shape-2"></div>
@@ -461,9 +423,7 @@ const SignUp = () => {
         <div className="signup-bg-shape signup-bg-shape-4"></div>
       </div>
 
-      {/* Main Content */}
       <div className="signup-content-wrapper">
-        {/* Left Column - Features */}
         <div className="signup-left-col">
           <div className="signup-brand">
             <div className="signup-logo-wrapper">
@@ -508,10 +468,8 @@ const SignUp = () => {
           </div>
         </div>
 
-        {/* Right Column - Sign Up Form */}
         <div className="signup-right-col">
           <div className="signup-form-card">
-            {/* Success Message */}
             {errors.success && (
               <div className="signup-success-message">
                 <CheckCircle size={20} />
@@ -520,10 +478,8 @@ const SignUp = () => {
             )}
 
             {!signUpMethod ? (
-              /* Step 1: Show Role Selection */
               renderRoleSelection()
             ) : (
-              /* Step 2: Show Email Sign Up Form */
               <div className="signup-email-form">
                 <button
                   onClick={() => setSignUpMethod(null)}
@@ -545,12 +501,11 @@ const SignUp = () => {
                   </div>
                   <h3 className="signup-form-title">Create Your Account</h3>
                   <p className="signup-form-subtitle">
-                    Fill in your details to get started
+                    Fill in your details to get started as a {selectedRole}
                   </p>
                 </div>
 
                 <div className="signup-form-fields">
-                  {/* Full Name */}
                   <div className="signup-field-group">
                     <label className="signup-field-label">
                       <User size={16} />
@@ -574,7 +529,6 @@ const SignUp = () => {
                     </div>
                   </div>
 
-                  {/* Email */}
                   <div className="signup-field-group">
                     <label className="signup-field-label">
                       <Mail size={16} />
@@ -598,7 +552,6 @@ const SignUp = () => {
                     </div>
                   </div>
 
-                  {/* Password */}
                   <div className="signup-field-group">
                     <label className="signup-field-label">
                       <Lock size={16} />
@@ -646,7 +599,6 @@ const SignUp = () => {
                     </div>
                   </div>
 
-                  {/* Confirm Password */}
                   <div className="signup-field-group">
                     <label className="signup-field-label">
                       <Lock size={16} />
@@ -680,7 +632,6 @@ const SignUp = () => {
                     </div>
                   </div>
 
-                  {/* Terms Agreement */}
                   <div className="signup-terms-group">
                     <label className="signup-checkbox-label">
                       <input
@@ -706,7 +657,6 @@ const SignUp = () => {
                     )}
                   </div>
 
-                  {/* Submit Button */}
                   <button
                     onClick={handleEmailSignUp}
                     className="signup-btn signup-btn-submit"
@@ -716,7 +666,7 @@ const SignUp = () => {
                       <LoadingSpinner />
                     ) : (
                       <>
-                        <span>Create Account</span>
+                        <span>Create {selectedRole?.charAt(0).toUpperCase() + selectedRole?.slice(1)} Account</span>
                         <ArrowRight size={20} />
                       </>
                     )}
@@ -741,7 +691,6 @@ const SignUp = () => {
               </div>
             )}
 
-            {/* Trust Badges */}
             <div className="signup-trust-badges">
               <div className="signup-trust-item">
                 <Shield size={14} />

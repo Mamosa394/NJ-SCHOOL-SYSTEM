@@ -29,37 +29,74 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Listen for auth changes (Google OAuth)
   useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Only redirect if there's an active session AND user has a complete profile
+        // AND user is not currently in the login process
+        if (session?.user && !isLoggingIn && !isRedirecting) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+
+          // Only auto-redirect if profile is complete (has a role)
+          if (profile?.role) {
+            setIsRedirecting(true);
+            navigateBasedOnRole(profile.role);
+          } else {
+            // If no role, clear the incomplete session
+            await supabase.auth.signOut();
+            localStorage.removeItem('user');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+        // If error, sign out to allow fresh login
+        await supabase.auth.signOut();
+        localStorage.removeItem('user');
+      }
+    };
+
+    checkExistingSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
       
-      if (event === 'SIGNED_IN' && session && !isRedirecting) {
+      // Only handle SIGNED_IN if it happened during an active login attempt
+      if (event === 'SIGNED_IN' && session && isLoggingIn && !isRedirecting) {
         setIsRedirecting(true);
         await handleSuccessfulAuth(session.user);
       }
+      
+      // Handle sign out during login attempt
+      if (event === 'SIGNED_OUT') {
+        setIsLoggingIn(false);
+        setIsRedirecting(false);
+      }
     });
-
-    // Check for existing session
-    checkExistingSession();
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isLoggingIn, isRedirecting, navigate]);
 
-  const checkExistingSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user && !isRedirecting) {
-        setIsRedirecting(true);
-        await handleSuccessfulAuth(session.user);
+  // Clean up login state on unmount
+  useEffect(() => {
+    return () => {
+      // When leaving login page, clean up if not in the middle of logging in
+      if (!isLoggingIn && !isRedirecting) {
+        supabase.auth.signOut().catch(console.error);
+        localStorage.removeItem('user');
       }
-    } catch (error) {
-      console.error('Error checking session:', error);
-    }
-  };
+    };
+  }, [isLoggingIn, isRedirecting]);
 
   const navigateBasedOnRole = (role) => {
     const routes = {
@@ -141,6 +178,7 @@ const Login = () => {
         server: 'Error processing authentication. Please try again.' 
       });
       setIsRedirecting(false);
+      setIsLoggingIn(false);
     }
   };
 
@@ -184,6 +222,7 @@ const Login = () => {
     if (!validateForm()) return;
     
     setLoading(true);
+    setIsLoggingIn(true);
     setErrors({});
     
     try {
@@ -206,6 +245,7 @@ const Login = () => {
       console.error("Login Error:", error);
       setErrors({ server: error.message });
       setLoading(false);
+      setIsLoggingIn(false);
     }
   };
 
@@ -214,9 +254,15 @@ const Login = () => {
     if (loading || isRedirecting) return;
     
     setLoading(true);
+    setIsLoggingIn(true);
     setErrors({});
     
     try {
+      // Clear any existing session first
+      await supabase.auth.signOut();
+      localStorage.removeItem('user');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -236,6 +282,7 @@ const Login = () => {
       console.error('Google login error:', error);
       setErrors({ server: error.message || 'Failed to login with Google' });
       setLoading(false);
+      setIsLoggingIn(false);
     }
   };
 

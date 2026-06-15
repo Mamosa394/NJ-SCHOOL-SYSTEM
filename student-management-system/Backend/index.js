@@ -166,6 +166,225 @@ const formatDate = (dateString) => {
   return null;
 };
 
+// ==================== ROLE-BASED REGISTRATION ENDPOINTS ====================
+
+// Common registration for all roles
+app.post('/api/register/:role', async (req, res) => {
+  try {
+    const { role } = req.params;
+    const validRoles = ['student', 'teacher', 'parent', 'admin'];
+    
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
+    const userId = req.user.id;
+    const userData = req.body;
+
+    // Basic validation
+    if (!userData.full_name || !userData.email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Full name and email are required'
+      });
+    }
+
+    console.log(`📝 Registering ${role}:`, userData);
+
+    // Map role to table name
+    const tableMap = {
+      student: 'students',
+      teacher: 'teachers',
+      parent: 'parents',
+      admin: 'admins'
+    };
+
+    const tableName = tableMap[role];
+
+    // Check if user already exists in this table
+    const { data: existingUser } = await supabaseAdmin
+      .from(tableName)
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: `${role.charAt(0).toUpperCase() + role.slice(1)} profile already exists`
+      });
+    }
+
+    // Prepare role-specific data
+    const roleData = {
+      id: userId,
+      email: userData.email,
+      full_name: userData.full_name,
+      role: role,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: userId,
+      updated_by: userId
+    };
+
+    // Add role-specific fields
+    if (role === 'student') {
+      roleData.student_number = userData.student_number || `STU${Date.now().toString().slice(-6)}`;
+      roleData.grade_level = userData.grade_level || 'Grade 11';
+      roleData.subjects = userData.subjects || [];
+      roleData.enrollment_status = 'pending';
+    } else if (role === 'teacher') {
+      roleData.teacher_id = userData.teacher_id || `TCH${Date.now().toString().slice(-6)}`;
+      roleData.specialization = userData.specialization || '';
+      roleData.qualification = userData.qualification || '';
+    } else if (role === 'parent') {
+      roleData.parent_id = userData.parent_id || `PRT${Date.now().toString().slice(-6)}`;
+      roleData.children = userData.children || [];
+    } else if (role === 'admin') {
+      roleData.admin_id = userData.admin_id || `ADM${Date.now().toString().slice(-6)}`;
+      roleData.department = userData.department || 'General';
+    }
+
+    // Insert into role-specific table
+    const { data: insertedData, error: insertError } = await supabaseAdmin
+      .from(tableName)
+      .insert([roleData])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error(`❌ Error inserting ${role}:`, insertError);
+      throw insertError;
+    }
+
+    // Also update the profiles table
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: userId,
+        email: userData.email,
+        full_name: userData.full_name,
+        role: role,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError);
+    }
+
+    console.log(`✅ ${role} registered successfully:`, userData.full_name);
+
+    res.status(201).json({
+      success: true,
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} registered successfully`,
+      data: insertedData
+    });
+
+  } catch (error) {
+    console.error(`🔥 Registration error for ${req.params.role}:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      message: error.message
+    });
+  }
+});
+
+// Get user by role
+app.get('/api/users/:role/:id', async (req, res) => {
+  try {
+    const { role, id } = req.params;
+    const validRoles = ['student', 'teacher', 'parent', 'admin'];
+    
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+    }
+
+    const tableMap = {
+      student: 'students',
+      teacher: 'teachers',
+      parent: 'parents',
+      admin: 'admins'
+    };
+
+    const { data, error } = await supabase
+      .from(tableMap[role])
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({
+      success: true,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get users by role
+app.get('/api/users/:role', async (req, res) => {
+  try {
+    const { role } = req.params;
+    const validRoles = ['student', 'teacher', 'parent', 'admin'];
+    
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+    }
+
+    const tableMap = {
+      student: 'students',
+      teacher: 'teachers',
+      parent: 'parents',
+      admin: 'admins'
+    };
+
+    const { data, error } = await supabase
+      .from(tableMap[role])
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({
+      success: true,
+      count: data.length,
+      data
+    });
+
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ==================== STUDENT REGISTRATION ====================
 app.post('/api/students', async (req, res) => {
   try {
@@ -1090,34 +1309,30 @@ app.listen(PORT, () => {
   console.log(`
 ✅ Server running on http://localhost:${PORT}
 📚 API Endpoints:
-   POST /api/students                 - Register student
-   GET  /api/students                 - Get all students  
-   GET  /api/students/:id             - Get single student
+   POST /api/register/:role             - Register as student/teacher/parent/admin
+   GET  /api/users/:role                 - Get all users by role
+   GET  /api/users/:role/:id             - Get single user by role and ID
    
-   POST /api/payments                  - Save payment info
-   GET  /api/payments/student/:id      - Get student payments
-   GET  /api/payments/:id              - Get single payment
-   PUT  /api/payments/:id/status       - Update payment status
+   POST /api/students                   - Register student
+   GET  /api/students                   - Get all students
+   GET  /api/students/:id               - Get single student
    
-   POST /api/upload-payment-proof      - Upload payment screenshot
-   POST /api/complete-registration     - Complete registration with payment
+   POST /api/payments                   - Save payment info
+   GET  /api/payments/student/:id       - Get student payments
+   GET  /api/payments/:id               - Get single payment
+   PUT  /api/payments/:id/status        - Update payment status
    
-   POST /api/auth/register             - User registration
+   POST /api/upload-payment-proof       - Upload payment screenshot
+   POST /api/complete-registration      - Complete registration with payment
+   
+   POST /api/auth/register              - User registration
    POST /api/auth/login                 - User login
    POST /api/auth/logout                - User logout
-   GET  /api/auth/profile                - Get user profile
+   GET  /api/auth/profile               - Get user profile
    
    GET  /api/health                     - Health check
    GET  /api/test                       - Test Supabase
 
-🔧 Important Notes:
-   • student_number must be 9 digits
-   • grade_level must be Grade 8-12
-   • Phone numbers are automatically formatted to pass validation
-   • Payment proofs go to Supabase Storage
-   • Payments table created for tracking
-   • All endpoints require Bearer token except auth endpoints
-
-🚀 Ready for student registration!
+🚀 Server is ready!
 `);
 });
