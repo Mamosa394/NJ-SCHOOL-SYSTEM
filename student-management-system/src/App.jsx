@@ -3,7 +3,7 @@ import HomePage from "./components/HomePage";
 import Signup from "./components/Signup";
 import Login from "./components/Login";
 import AdminDashboard from "./pages/AdminDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
+import TeacherDashboard from "./Teacher/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
@@ -12,6 +12,7 @@ import MultiStageRegistration from './components/MultiStageRegistration';
 import './App.css';
 import SignUp from './components/Signup';
 import AdminVerification from './admin_only/AdminVerification';
+import AuthCallback from './components/AuthCallback';
 
 // ✅ Security Gatekeeper Component
 const ProtectedRoute = ({ allowedRoles }) => {
@@ -44,6 +45,7 @@ function App() {
         <Route path="/teacherdashboard" element={<TeacherDashboard />} />
         <Route path="/admindashboard" element={<AdminDashboard />} />
         <Route path="/parentdashboard" element={<ParentDashboard />} />
+        <Route path="/authcallback" element={<AuthCallback />} />
 
 
 

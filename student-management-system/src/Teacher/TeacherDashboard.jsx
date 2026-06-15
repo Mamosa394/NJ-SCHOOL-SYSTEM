@@ -7,7 +7,28 @@ import {
 } from 'react-icons/fa';
 import '../styles/teacherdashboard.css';
 
-const TeacherHome = ({ stats, classes, materials, events, attendance }) => {
+const TeacherHome = ({ 
+  stats = {
+    totalStudents: 0,
+    attendanceRate: 0,
+    materialsCount: 0,
+    upcomingClasses: 0
+  }, 
+  classes = [], 
+  materials = [], 
+  events = [], 
+  attendance = [] 
+}) => {
+  // Show loading state if data isn't fully loaded
+  if (!stats || classes.length === 0) {
+    return (
+      <div className="teacher-loading">
+        <div className="teacher-loading-spinner"></div>
+        <p>Loading dashboard data...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="teacher-overview-grid">
       {/* Welcome Section */}
