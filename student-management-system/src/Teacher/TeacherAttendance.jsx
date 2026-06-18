@@ -2,7 +2,7 @@ import React from 'react';
 import {
   FaUserCheck, FaDownload, FaPlus, FaEdit
 } from 'react-icons/fa';
-import '../styles/teacherdashboard.css';
+import '../styles/teacher/teacherdashboard.css';
 
 const TeacherAttendance = ({ attendance, stats }) => {
   return (

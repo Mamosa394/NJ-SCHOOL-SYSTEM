@@ -2,7 +2,7 @@ import React from 'react';
 import {
   FaBullhorn, FaPlus
 } from 'react-icons/fa';
-import '../styles/teacherdashboard.css';
+import '../styles/teacher/teacherdashboard.css';
 
 const TeacherEvents = ({ events }) => {
   return (

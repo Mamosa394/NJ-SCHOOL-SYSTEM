@@ -1,0 +1,566 @@
+/* src/styles/teachermarks.css */
+
+/* ===== TEACHER MARKS - Following Dashboard Color Scheme ===== */
+
+/* Message Banner */
+.marks-message {
+  padding: 12px 20px;
+  border-radius: var(--dash-radius);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-weight: 500;
+  font-size: 14px;
+  animation: marksSlideDown 0.3s ease;
+}
+
+.marks-message.success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.marks-message.error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+@keyframes marksSlideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Card */
+.marks-card {
+  background: var(--dash-surface);
+  border-radius: var(--dash-radius-lg);
+  padding: 24px;
+  box-shadow: var(--dash-shadow);
+  border: 1px solid var(--dash-border);
+  margin-bottom: 20px;
+}
+
+.marks-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.marks-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dash-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marks-subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dash-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marks-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Selectors */
+.marks-selectors {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.marks-selector-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.marks-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dash-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.marks-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--dash-border);
+  border-radius: var(--dash-radius-sm);
+  font-size: 14px;
+  color: var(--dash-text);
+  transition: var(--dash-transition);
+  background: var(--dash-surface);
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23636e72' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+
+.marks-select:focus {
+  outline: none;
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 3px var(--dash-primary-bg);
+}
+
+/* Form */
+.marks-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.marks-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marks-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--dash-border);
+  border-radius: var(--dash-radius-sm);
+  font-size: 14px;
+  color: var(--dash-text);
+  transition: var(--dash-transition);
+  background: var(--dash-surface);
+  font-family: 'Inter', sans-serif;
+}
+
+.marks-input:focus {
+  outline: none;
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 3px var(--dash-primary-bg);
+}
+
+.marks-form-actions {
+  margin-top: 16px;
+}
+
+/* Buttons */
+.marks-btn {
+  padding: 10px 20px;
+  border-radius: var(--dash-radius);
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: var(--dash-transition);
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+}
+
+.marks-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.marks-btn-primary {
+  background: var(--dash-primary);
+  color: white;
+}
+
+.marks-btn-primary:hover:not(:disabled) {
+  background: var(--dash-primary-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(40, 53, 147, 0.3);
+}
+
+.marks-btn-success {
+  background: var(--dash-green);
+  color: white;
+}
+
+.marks-btn-success:hover:not(:disabled) {
+  background: #00a381;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 184, 148, 0.3);
+}
+
+.marks-btn-outline {
+  background: var(--dash-surface);
+  color: var(--dash-primary);
+  border: 2px solid var(--dash-primary);
+}
+
+.marks-btn-outline:hover:not(:disabled) {
+  background: var(--dash-primary-bg);
+  transform: translateY(-1px);
+}
+
+.marks-btn-cancel {
+  background: var(--dash-surface);
+  color: var(--dash-text-light);
+  border: 2px solid var(--dash-border);
+}
+
+.marks-btn-cancel:hover:not(:disabled) {
+  background: var(--dash-surface-alt);
+  border-color: var(--dash-text-muted);
+}
+
+.marks-btn-danger {
+  background: var(--dash-surface);
+  color: var(--dash-red);
+  border: 2px solid var(--dash-red);
+  padding: 10px 14px;
+}
+
+.marks-btn-danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+/* Assessment Info */
+.marks-assessment-info {
+  flex: 1;
+}
+
+.marks-assessment-meta {
+  font-size: 13px;
+  color: var(--dash-text-light);
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.marks-meta-sep {
+  color: var(--dash-border);
+  margin: 0 4px;
+}
+
+.marks-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Search */
+.marks-search {
+  position: relative;
+  max-width: 400px;
+  margin-bottom: 16px;
+}
+
+.marks-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dash-text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.marks-search-input {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  border: 2px solid var(--dash-border);
+  border-radius: var(--dash-radius-sm);
+  font-size: 14px;
+  color: var(--dash-text);
+  transition: var(--dash-transition);
+  background: var(--dash-surface);
+  font-family: 'Inter', sans-serif;
+}
+
+.marks-search-input:focus {
+  outline: none;
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 3px var(--dash-primary-bg);
+}
+
+.marks-search-input::placeholder {
+  color: var(--dash-text-muted);
+}
+
+/* Table */
+.marks-table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--dash-radius);
+  border: 1px solid var(--dash-border);
+  -webkit-overflow-scrolling: touch;
+}
+
+.marks-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+  font-size: 14px;
+}
+
+.marks-table thead {
+  background: var(--dash-surface-alt);
+}
+
+.marks-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dash-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border-bottom: 2px solid var(--dash-border);
+  white-space: nowrap;
+}
+
+.marks-th-center {
+  text-align: center;
+}
+
+.marks-table tbody tr {
+  border-bottom: 1px solid var(--dash-border-light);
+  transition: background 0.2s ease;
+}
+
+.marks-table tbody tr:hover {
+  background: var(--dash-surface-alt);
+}
+
+.marks-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.marks-table td {
+  padding: 12px 16px;
+  color: var(--dash-text);
+  vertical-align: middle;
+}
+
+/* Student Cell */
+.marks-student-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.marks-student-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--dash-radius-sm);
+  background: linear-gradient(135deg, var(--dash-primary), var(--dash-primary-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.marks-student-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--dash-text);
+}
+
+.marks-td-id {
+  font-size: 13px;
+  color: var(--dash-text-light);
+}
+
+.marks-td-grade {
+  font-size: 13px;
+  color: var(--dash-text);
+}
+
+.marks-td-center {
+  text-align: center;
+}
+
+/* Score Input */
+.marks-score-input {
+  width: 70px;
+  padding: 8px 10px;
+  border: 2px solid var(--dash-border);
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--dash-text);
+  transition: var(--dash-transition);
+  background: var(--dash-surface);
+  font-family: 'Inter', sans-serif;
+}
+
+.marks-score-input:focus {
+  outline: none;
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 3px var(--dash-primary-bg);
+}
+
+.marks-score-input::placeholder {
+  color: var(--dash-text-muted);
+}
+
+/* Comment Input */
+.marks-comment-input {
+  width: 100%;
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 2px solid var(--dash-border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--dash-text);
+  transition: var(--dash-transition);
+  background: var(--dash-surface);
+  font-family: 'Inter', sans-serif;
+}
+
+.marks-comment-input:focus {
+  outline: none;
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 3px var(--dash-primary-bg);
+}
+
+.marks-comment-input::placeholder {
+  color: var(--dash-text-muted);
+  font-style: italic;
+}
+
+/* Loading */
+.marks-loading {
+  text-align: center;
+  padding: 40px;
+}
+
+.marks-spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--dash-border);
+  border-top-color: var(--dash-primary);
+  animation: marksSpin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes marksSpin {
+  to { transform: rotate(360deg); }
+}
+
+.marks-loading p {
+  color: var(--dash-text-light);
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .marks-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .marks-card-header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 768px) {
+  .marks-selectors {
+    flex-direction: column;
+  }
+  
+  .marks-form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .marks-table th,
+  .marks-table td {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  
+  .marks-score-input {
+    width: 60px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .marks-comment-input {
+    min-width: 120px;
+    font-size: 12px;
+  }
+  
+  .marks-student-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+  
+  .marks-card-actions {
+    width: 100%;
+  }
+  
+  .marks-card-actions .marks-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .marks-card {
+    padding: 16px;
+  }
+  
+  .marks-assessment-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  
+  .marks-meta-sep {
+    display: none;
+  }
+  
+  .marks-btn {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  
+  .marks-table {
+    min-width: 500px;
+  }
+  
+  .marks-table th {
+    font-size: 10px;
+    padding: 8px 10px;
+  }
+  
+  .marks-table td {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+  
+  .marks-score-input {
+    width: 50px;
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+  
+  .marks-comment-input {
+    min-width: 100px;
+    font-size: 11px;
+  }
+}

@@ -15,7 +15,7 @@ import {
   FaUserGraduate,
   FaClock
 } from "react-icons/fa";
-import "../styles/teacherregistration.css";
+import "../styles/teacher/teacherregistration.css";
 
 const TeacherRegistration = ({ onRegistrationComplete }) => {
   const navigate = useNavigate();

@@ -4,11 +4,12 @@ import {
   FaHome, FaClipboardList, FaBook,
   FaUserCheck, FaCalendarAlt, FaBullhorn,
   FaChalkboardTeacher, FaBars, FaTimes,
-  FaCog, FaBell, FaUsers, FaChartLine,
-  FaUserEdit, FaExclamationTriangle, FaCheckCircle
+  FaExclamationTriangle, FaCheckCircle,
+  FaSignOutAlt, FaUser, FaChevronLeft,
+  FaChevronRight
 } from 'react-icons/fa';
 import { supabase } from '../components/supabaseClient';
-import '../styles/teacher-sidebar.css';
+import '../styles/teacher/teacher-sidebar.css';
 
 const TeacherSidebar = ({ 
   activeTab, 
@@ -20,15 +21,18 @@ const TeacherSidebar = ({
   const [teacherData, setTeacherData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showTooltip, setShowTooltip] = useState(null);
 
   useEffect(() => {
-    fetchTeacherData();
-    
-    // Set up real-time subscription
-    const setupSubscription = async () => {
+    let mounted = true;
+    let subscription = null;
+
+    const initialize = async () => {
+      await fetchTeacherData();
+      
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const subscription = supabase
+      if (user && mounted) {
+        subscription = supabase
           .channel('teacher-sidebar-updates')
           .on(
             'postgres_changes',
@@ -39,23 +43,22 @@ const TeacherSidebar = ({
               filter: `id=eq.${user.id}`
             },
             (payload) => {
-              console.log('Teacher data updated:', payload);
-              if (payload.new) {
+              if (payload.new && mounted) {
                 setTeacherData(payload.new);
               }
             }
           )
           .subscribe();
-
-        return () => {
-          subscription.unsubscribe();
-        };
       }
     };
 
-    const cleanup = setupSubscription();
+    initialize();
+
     return () => {
-      if (cleanup) cleanup.then(fn => fn && fn());
+      mounted = false;
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
     };
   }, []);
 
@@ -80,16 +83,17 @@ const TeacherSidebar = ({
 
       if (teacherError) {
         if (teacherError.code === 'PGRST116') {
-          setError('Teacher not found');
+          setError('Teacher profile not found');
         } else {
           throw teacherError;
         }
       } else {
         setTeacherData(teacher);
+        setError(null);
       }
     } catch (error) {
       console.error('Error fetching teacher:', error);
-      setError(error.message);
+      setError(error.message || 'Failed to load teacher data');
     } finally {
       setIsLoading(false);
     }
@@ -107,156 +111,127 @@ const TeacherSidebar = ({
 
   const getDisplayName = () => {
     if (teacherData?.full_name) return teacherData.full_name;
+    if (teacherData?.email) return teacherData.email?.split('@')[0] || 'Teacher';
     return 'Teacher';
   };
 
   const getSubjectsDisplay = () => {
     if (!teacherData?.subjects || teacherData.subjects.length === 0) return 'No subjects';
     if (Array.isArray(teacherData.subjects)) {
-      return teacherData.subjects.join(' & ');
+      return teacherData.subjects.slice(0, 2).join(' & ');
     }
     return teacherData.subjects;
   };
 
-  const getTeachingTypeDisplay = () => {
-    if (!teacherData?.teaching_type) return '';
-    switch(teacherData.teaching_type) {
-      case 'supplementary': return 'Supplementary Students';
-      case 'extra_classes': return 'Extra Classes';
-      case 'both': return 'Both Programs';
-      default: return '';
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
   };
 
-  const getApprovalBadge = () => {
-    if (!teacherData) return null;
-    
-    switch(teacherData.approval_status) {
-      case 'approved':
-        return (
-          <span className="teacher-status-badge registered">
-            <FaCheckCircle /> Approved
-          </span>
-        );
-      case 'pending':
-        return (
-          <span className="teacher-status-badge unregistered">
-            ⏳ Pending Approval
-          </span>
-        );
-      case 'rejected':
-        return (
-          <span className="teacher-status-badge incomplete">
-            ❌ Rejected
-          </span>
-        );
-      default:
-        return null;
-    }
+  const handleNavClick = (tabId) => {
+    setActiveTab(tabId);
+    if (isMobile) toggleSidebar();
   };
+
+  const isProfileActive = activeTab === 'profile';
 
   return (
     <>
+      {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
-        <div className="teacher-sidebar-overlay visible" onClick={toggleSidebar} />
+        <div className="sidebar-overlay" onClick={toggleSidebar} />
       )}
       
-      <aside className={`teacher-sidebar ${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'mobile' : ''}`}>
-        {/* Header */}
+      <aside className={`teacher-sidebar ${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'mobile' : ''} ${isMobile && sidebarOpen ? 'mobile-open' : ''}`}>
+        
+        {/* Header with collapse button */}
         <div className="teacher-sidebar-header">
           <div className="teacher-sidebar-logo">
             <FaChalkboardTeacher />
-            <span className="teacher-school-name">Teacher Portal</span>
+            {sidebarOpen && <span className="teacher-school-name">Teacher Portal</span>}
           </div>
-          <button className="teacher-sidebar-toggle" onClick={toggleSidebar}>
-            {sidebarOpen ? <FaTimes /> : <FaBars />}
+          
+          {/* Collapse/Expand button */}
+          <button 
+            className="sidebar-toggle-btn" 
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {isMobile ? (
+              <FaTimes />
+            ) : sidebarOpen ? (
+              <FaChevronLeft />
+            ) : (
+              <FaChevronRight />
+            )}
           </button>
         </div>
 
         {/* Teacher Profile Section */}
-        <div className="teacher-user-profile">
-          {isLoading ? (
-            <div className="teacher-profile-loading">
-              <div className="teacher-avatar-skeleton"></div>
-              <div className="teacher-info-skeleton">
-                <div className="skeleton-line"></div>
-                <div className="skeleton-line short"></div>
-              </div>
+        {teacherData && teacherData.registration_completed && (
+          <div 
+            className={`teacher-user-profile ${isProfileActive ? 'active-profile' : ''}`}
+            onClick={() => handleNavClick('profile')}
+          >
+            <div className={`teacher-user-avatar ${teacherData.approval_status === 'approved' ? 'registered-teacher' : ''}`}>
+              {getInitials(getDisplayName())}
             </div>
-          ) : error ? (
-            <div className="teacher-profile-error">
-              <FaExclamationTriangle />
-              <p>{error}</p>
-              <button onClick={fetchTeacherData} className="retry-btn">Retry</button>
-            </div>
-          ) : teacherData ? (
-            <>
-              <div className={`teacher-user-avatar ${teacherData.approval_status === 'approved' ? 'registered-teacher' : 'unregistered'}`}>
-                {getInitials(getDisplayName())}
-                {teacherData.approval_status === 'approved' && (
-                  <span className="teacher-verified-badge">
-                    <FaCheckCircle />
-                  </span>
-                )}
-              </div>
+            {sidebarOpen && (
               <div className="teacher-user-info">
                 <h3>{getDisplayName()}</h3>
-                {teacherData.teacher_id && (
-                  <p className="teacher-user-id">ID: {teacherData.teacher_id}</p>
-                )}
                 <p className="teacher-user-role">{getSubjectsDisplay()}</p>
-                {getTeachingTypeDisplay() && (
-                  <p className="teacher-user-subject">{getTeachingTypeDisplay()}</p>
-                )}
-                {teacherData.qualification && (
-                  <p className="teacher-user-department">{teacherData.qualification}</p>
-                )}
-                {getApprovalBadge()}
               </div>
-            </>
-          ) : (
-            <div className="teacher-profile-error">
-              <FaExclamationTriangle />
-              <p>No teacher data found</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Navigation */}
-        {!isLoading && teacherData && teacherData.registration_completed && (
+        {teacherData && teacherData.registration_completed && (
           <nav className="teacher-sidebar-nav">
-            {tabs.map(item => (
+            {tabs.map((item) => (
               <button
                 key={item.id}
                 className={`teacher-nav-item ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  if (isMobile) toggleSidebar();
-                }}
+                onClick={() => handleNavClick(item.id)}
+                onMouseEnter={() => !sidebarOpen && !isMobile && setShowTooltip(item.id)}
+                onMouseLeave={() => setShowTooltip(null)}
               >
                 <span className="teacher-nav-icon">{item.icon}</span>
                 {sidebarOpen && <span className="teacher-nav-label">{item.label}</span>}
                 {activeTab === item.id && <span className="active-indicator"></span>}
+                
+                {/* Tooltip for collapsed state */}
+                {!sidebarOpen && !isMobile && showTooltip === item.id && (
+                  <div className="nav-tooltip">
+                    {item.label}
+                  </div>
+                )}
               </button>
             ))}
           </nav>
         )}
 
-        {/* Footer */}
-        {!isLoading && teacherData && teacherData.registration_completed && (
+        {/* Sign Out Button */}
+        {teacherData && teacherData.registration_completed && (
           <div className="teacher-sidebar-footer">
-            <div className="teacher-quick-links">
-              <h4><FaCog /> Quick Settings</h4>
-              <button className="teacher-sidebar-btn">
-                <FaBell /> Notifications
-              </button>
-              <button className="teacher-sidebar-btn">
-                <FaUsers /> Student Reports
-              </button>
-              <button className="teacher-sidebar-btn">
-                <FaChartLine /> Performance
-              </button>
-            </div>
+            <button 
+              className="signout-btn"
+              onClick={handleLogout}
+              onMouseEnter={() => !sidebarOpen && !isMobile && setShowTooltip('signout')}
+              onMouseLeave={() => setShowTooltip(null)}
+            >
+              <span className="signout-icon">
+                <FaSignOutAlt />
+              </span>
+              {sidebarOpen && <span className="signout-text">Sign Out</span>}
+              
+              {/* Tooltip for collapsed state */}
+              {!sidebarOpen && !isMobile && showTooltip === 'signout' && (
+                <div className="nav-tooltip">
+                  Sign Out
+                </div>
+              )}
+            </button>
           </div>
         )}
       </aside>
@@ -271,6 +246,7 @@ const tabs = [
   { id: 'attendance', label: 'Attendance', icon: <FaUserCheck /> },
   { id: 'timetable', label: 'Timetable', icon: <FaCalendarAlt /> },
   { id: 'events', label: 'Events', icon: <FaBullhorn /> },
+  { id: 'profile', label: 'My Profile', icon: <FaUser /> },
 ];
 
 export default TeacherSidebar;
