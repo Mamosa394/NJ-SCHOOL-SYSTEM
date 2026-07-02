@@ -3,7 +3,7 @@ import {
   FaBook, FaSearch, FaPlus, FaFileUpload,
   FaFileAlt, FaDownload, FaEdit, FaTrash
 } from 'react-icons/fa';
-import '../styles/teacherdashboard.css';
+import '../styles/teacher/teacherdashboard.css';
 
 const TeacherMaterials = ({ materials }) => {
   return (
