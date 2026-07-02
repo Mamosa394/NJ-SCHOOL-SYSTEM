@@ -59,14 +59,7 @@ const SignUp = () => {
       color: '#D97706',
       gradient: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)'
     },
-    {
-      id: 'admin',
-      label: 'Admin',
-      icon: UserCog,
-      description: 'Manage the platform, users, and oversee operations',
-      color: '#4F46E5',
-      gradient: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)'
-    }
+
   ];
 
   // Validate form

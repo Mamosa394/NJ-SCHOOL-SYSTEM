@@ -1,20 +1,30 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import HomePage from "./components/HomePage";
-import Signup from "./components/Signup";
+import SignUp from "./components/Signup";
 import Login from "./components/Login";
-import AdminDashboard from "./pages/AdminDashboard";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminRegistrations from "./pages/admin/AdminRegistrations";
+import AdminStudents from "./pages/admin/AdminStudents";
+import AdminTeachers from "./pages/admin/AdminTeachers";
+import AdminPayments from "./pages/admin/AdminPayments";
+import AdminEvents from "./pages/admin/AdminEvents";
+import AdminManageAdmins from "./pages/admin/AdminManageAdmins";
+import AdminReports from "./pages/admin/AdminReports";
+import AdminSettings from "./pages/admin/AdminSettings";
 import TeacherDashboard from "./Teacher/TeacherDashboard";
 import ParentDashboard from "./pages/ParentDashboard";
 import StudentDashboard from "./pages/students/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
 import SelectRole from './components/SelectRole';
 import MultiStageRegistration from './components/MultiStageRegistration';
-import './App.css';
-import SignUp from './components/Signup';
 import AdminVerification from './admin_only/AdminVerification';
 import AuthCallback from './components/AuthCallback';
+import './App.css';
 
-// ✅ Security Gatekeeper Component
+// =============================================
+// SECURITY GATEKEEPER - Checks user role
+// =============================================
 const ProtectedRoute = ({ allowedRoles }) => {
   const user = JSON.parse(localStorage.getItem('user'));
 
@@ -23,59 +33,106 @@ const ProtectedRoute = ({ allowedRoles }) => {
   }
 
   if (!allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />; // Redirect home if they don't have permission
+    // Redirect to their appropriate dashboard
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
+    if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
+    if (user.role === 'student') return <Navigate to="/student" replace />;
+    if (user.role === 'parent') return <Navigate to="/parent" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <Outlet />; // Render the dashboard
+  return <Outlet />;
+};
+
+// =============================================
+// ADMIN LAYOUT - Wrapper for all admin pages
+// =============================================
+const AdminLayout = () => {
+  return (
+    <ProtectedRoute allowedRoles={['admin']}>
+      <AdminDashboard />
+    </ProtectedRoute>
+  );
 };
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes */}
-        <Route path="/ss" element={<HomePage />} />
+        {/* ============================================ */}
+        {/* PUBLIC ROUTES */}
+        {/* ============================================ */}
         <Route path="/" element={<Login />} />
-        <Route path="/s" element={<StudentRegistration />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route path="/registration" element={<MultiStageRegistration />} />
-        <Route path="/adminVerification" element={<AdminVerification />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/select-role" element={<SelectRole />} />
-        <Route path="/studentdashboard" element={<StudentDashboard />} />
-        <Route path="/teacherdashboard" element={<TeacherDashboard />} />
-        <Route path="/admindashboard" element={<AdminDashboard />} />
-        <Route path="/parentdashboard" element={<ParentDashboard />} />
+        <Route path="/registration" element={<MultiStageRegistration />} />
         <Route path="/authcallback" element={<AuthCallback />} />
+        <Route path="/test-signup" element={<StudentRegistration />} />
 
-
-
-        
-        {/* ✅ Protected Dashboard Routes */}
-        
-        {/* Admin Only */}
-        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/adminVerification" element={<AdminVerification />} />
-
+        {/* ============================================ */}
+        {/* ADMIN ROUTES (Protected) */}
+        {/* ============================================ */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="registrations" element={<AdminRegistrations />} />
+          <Route path="students" element={<AdminStudents />} />
+          <Route path="teachers" element={<AdminTeachers />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="events" element={<AdminEvents />} />
+          <Route path="admins" element={<AdminManageAdmins />} />
+          <Route path="reports" element={<AdminReports />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
 
-        {/* Teacher Only */}
+        {/* Admin Verification (special route) */}
+        <Route path="/admin/verify" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminVerification />
+          </ProtectedRoute>
+        } />
+
+        {/* Legacy admin route - redirects to new admin dashboard */}
+        <Route path="/admindashboard" element={<Navigate to="/admin" replace />} />
+
+        {/* ============================================ */}
+        {/* TEACHER ROUTES (Protected) */}
+        {/* ============================================ */}
         <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
           <Route path="/teacher" element={<TeacherDashboard />} />
+          <Route path="/teacher/*" element={<TeacherDashboard />} />
         </Route>
+        <Route path="/teacherdashboard" element={<Navigate to="/teacher" replace />} />
 
-        {/* Student Only */}
+        {/* ============================================ */}
+        {/* STUDENT ROUTES (Protected) */}
+        {/* ============================================ */}
         <Route element={<ProtectedRoute allowedRoles={['student']} />}>
           <Route path="/student" element={<StudentDashboard />} />
+          <Route path="/student/*" element={<StudentDashboard />} />
         </Route>
+        <Route path="/studentdashboard" element={<Navigate to="/student" replace />} />
 
-        {/* Parent Only */}
+        {/* ============================================ */}
+        {/* PARENT ROUTES (Protected) */}
+        {/* ============================================ */}
         <Route element={<ProtectedRoute allowedRoles={['parent']} />}>
           <Route path="/parent" element={<ParentDashboard />} />
+          <Route path="/parent/*" element={<ParentDashboard />} />
         </Route>
-        
-        {/* 404 Page */}
-        <Route path="*" element={<div>404 - Page Not Found</div>} />
+        <Route path="/parentdashboard" element={<Navigate to="/parent" replace />} />
+
+        {/* ============================================ */}
+        {/* 404 - Page Not Found */}
+        {/* ============================================ */}
+        <Route path="*" element={
+          <div className="not-found">
+            <h1>404</h1>
+            <p>Page Not Found</p>
+            <a href="/">Go to Login</a>
+          </div>
+        } />
       </Routes>
     </Router>
   );
