@@ -1,4 +1,6 @@
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { supabase } from './components/supabaseClient'; 
 import HomePage from "./components/HomePage";
 import SignUp from "./components/Signup";
 import Login from "./components/Login";
@@ -23,21 +25,69 @@ import AuthCallback from './components/AuthCallback';
 import './App.css';
 
 // =============================================
-// SECURITY GATEKEEPER - Checks user role
+// ASYNC SECURITY GATEKEEPER (Zero LocalStorage Roles)
 // =============================================
 const ProtectedRoute = ({ allowedRoles }) => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const [authStatus, setAuthStatus] = useState({ loading: true, authenticated: false, role: null });
 
-  if (!user) {
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyServerAccess = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          if (isMounted) setAuthStatus({ loading: false, authenticated: false, role: null });
+          return;
+        }
+
+        // 1. Run administrative check via RPC (Server Truth Layer)
+        const { data: isAdmin, error: rpcError } = await supabase.rpc('check_is_administrative_user');
+        
+        if (!rpcError && isAdmin === true) {
+          if (isMounted) setAuthStatus({ loading: false, authenticated: true, role: 'admin' });
+          return;
+        }
+
+        // 2. Fall back to reading application role from app user metadata for standard accounts
+        const userRole = session.user.user_metadata?.role || 'student'; 
+        
+        if (isMounted) {
+          setAuthStatus({ loading: false, authenticated: true, role: userRole });
+        }
+      } catch (err) {
+        console.error("Route Guard Error:", err);
+        if (isMounted) setAuthStatus({ loading: false, authenticated: false, role: null });
+      }
+    };
+
+    verifyServerAccess();
+    return () => { isMounted = false; };
+  }, []);
+
+  if (authStatus.loading) {
+    return (
+      <div style={{ 
+        height: '100vh', display: 'flex', flexDirection: 'column', gap: '12px',
+        alignItems: 'center', justifyContent: 'center', background: '#0F172A', color: '#FFF' 
+      }}>
+        <div style={{ width: '24px', height: '24px', border: '3px solid #4F46E5', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.5px' }}>VERIFYING PORTAL CREDENTIALS...</p>
+      </div>
+    );
+  }
+
+  if (!authStatus.authenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
-    // Redirect to their appropriate dashboard
-    if (user.role === 'admin') return <Navigate to="/admin" replace />;
-    if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
-    if (user.role === 'student') return <Navigate to="/student" replace />;
-    if (user.role === 'parent') return <Navigate to="/parent" replace />;
+  if (!allowedRoles.includes(authStatus.role)) {
+    // Dynamic routing fallback if roles conflict
+    if (authStatus.role === 'admin') return <Navigate to="/admin" replace />;
+    if (authStatus.role === 'teacher') return <Navigate to="/teacher" replace />;
+    if (authStatus.role === 'student') return <Navigate to="/student" replace />;
+    if (authStatus.role === 'parent') return <Navigate to="/parent" replace />;
     return <Navigate to="/" replace />;
   }
 
@@ -45,14 +95,10 @@ const ProtectedRoute = ({ allowedRoles }) => {
 };
 
 // =============================================
-// ADMIN LAYOUT - Wrapper for all admin pages
+// ADMIN LAYOUT - Core Router Structural Wrapper
 // =============================================
 const AdminLayout = () => {
-  return (
-    <ProtectedRoute allowedRoles={['admin']}>
-      <AdminDashboard />
-    </ProtectedRoute>
-  );
+  return <AdminDashboard />;
 };
 
 function App() {
@@ -72,28 +118,25 @@ function App() {
         <Route path="/test-signup" element={<StudentRegistration />} />
 
         {/* ============================================ */}
-        {/* ADMIN ROUTES (Protected) */}
+        {/* ADMIN ROUTES (Protected Layout Nested) */}
         {/* ============================================ */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminOverview />} />
-          <Route path="registrations" element={<AdminRegistrations />} />
-          <Route path="students" element={<AdminStudents />} />
-          <Route path="teachers" element={<AdminTeachers />} />
-          <Route path="payments" element={<AdminPayments />} />
-          <Route path="events" element={<AdminEvents />} />
-          <Route path="admins" element={<AdminManageAdmins />} />
-          <Route path="reports" element={<AdminReports />} />
-          <Route path="settings" element={<AdminSettings />} />
+        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverview />} />
+            <Route path="registrations" element={<AdminRegistrations />} />
+            <Route path="students" element={<AdminStudents />} />
+            <Route path="teachers" element={<AdminTeachers />} />
+            <Route path="payments" element={<AdminPayments />} />
+            <Route path="events" element={<AdminEvents />} />
+            <Route path="admins" element={<AdminManageAdmins />} />
+            <Route path="reports" element={<AdminReports />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+          
+          <Route path="/admin/verify" element={<AdminVerification />} />
         </Route>
 
-        {/* Admin Verification (special route) */}
-        <Route path="/admin/verify" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminVerification />
-          </ProtectedRoute>
-        } />
-
-        {/* Legacy admin route - redirects to new admin dashboard */}
+        {/* Legacy redirect handling */}
         <Route path="/admindashboard" element={<Navigate to="/admin" replace />} />
 
         {/* ============================================ */}

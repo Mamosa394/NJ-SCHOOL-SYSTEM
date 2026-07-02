@@ -19,31 +19,32 @@ const SelectRole = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Available dashboards an Administrator can switch into
   const roles = [
     {
       id: 'admin',
-      label: 'Admin',
+      label: 'Admin Panel',
       icon: Shield,
       description: 'Platform management & oversight',
       color: '#4F46E5'
     },
     {
       id: 'teacher',
-      label: 'Teacher',
+      label: 'Teacher View',
       icon: GraduationCap,
       description: 'Create & manage courses',
       color: '#059669'
     },
     {
       id: 'student',
-      label: 'Student',
+      label: 'Student View',
       icon: BookOpen,
       description: 'Learn & track progress',
       color: '#2563EB'
     },
     {
       id: 'parent',
-      label: 'Parent',
+      label: 'Parent View',
       icon: Users,
       description: 'Monitor student progress',
       color: '#D97706'
@@ -65,14 +66,15 @@ const SelectRole = () => {
     setError('');
 
     try {
-      // Update the user's profile with selected role
+      // Safely logs the view change context or updates metadata without stripping primary admin privilege
       const { error: updateError } = await supabase
         .from('profiles')
         .upsert({
           id: userId,
           email: email,
           full_name: fullName,
-          role: selectedRole,
+          // Keeps database record structured but prevents losing master privilege
+          active_view: selectedRole, 
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'id'
@@ -80,16 +82,17 @@ const SelectRole = () => {
 
       if (updateError) throw updateError;
 
-      // Save user data to localStorage
+      // Save active session view configuration to localStorage
       const userData = {
         id: userId,
         email: email,
-        role: selectedRole,
+        role: 'admin', // Preserves master admin role explicitly in auth state
+        activeView: selectedRole,
         fullName: fullName
       };
       localStorage.setItem('user', JSON.stringify(userData));
 
-      // Redirect based on role
+      // Redirect directly to target workspace view
       const routes = {
         admin: '/admin/dashboard',
         teacher: '/teacher/dashboard',
@@ -126,11 +129,11 @@ const SelectRole = () => {
         {/* Header */}
         <div className="njec-role-header">
           <div className="njec-role-welcome">
-            <span className="njec-role-greeting">Welcome{fullName ? `, ${fullName.split(' ')[0]}` : ''}! 👋</span>
+            <span className="njec-role-greeting">Admin Console{fullName ? `, ${fullName.split(' ')[0]}` : ''}! 👋</span>
           </div>
-          <h1 className="njec-role-title">Select Your Role</h1>
+          <h1 className="njec-role-title">Switch Dashboard View</h1>
           <p className="njec-role-subtitle">
-            Choose your role to access the appropriate dashboard and features
+            Select an environment context below to pivot your workspace interface view.
           </p>
         </div>
 
@@ -192,7 +195,7 @@ const SelectRole = () => {
 
         {/* Description */}
         <div className="njec-role-footer-text">
-          <p>You can change your role later from your account settings</p>
+          <p>Switching views alters interface scope without changing permanent server privileges.</p>
         </div>
 
         {/* Continue Button */}
@@ -205,7 +208,7 @@ const SelectRole = () => {
             <div className="njec-role-spinner"></div>
           ) : (
             <>
-              <span>Continue to Dashboard</span>
+              <span>Switch Workspace</span>
               <ArrowRight size={20} />
             </>
           )}

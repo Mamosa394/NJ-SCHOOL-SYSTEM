@@ -8,7 +8,7 @@ import '../styles/authcallback.css';
 const AuthCallback = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState('processing');
-  const [message, setMessage] = useState('Completing your registration...');
+  const [message, setMessage] = useState('Completing authentication...');
 
   useEffect(() => {
     handleCallback();
@@ -25,10 +25,30 @@ const AuthCallback = () => {
     return sessionRole || localRole || cookieRole;
   };
 
+  const isLoginAttempt = () => {
+    return sessionStorage.getItem('googleLoginAttempt') === 'true';
+  };
+
+  const isSignupAttempt = () => {
+    return sessionStorage.getItem('pendingGoogleSignUp') === 'true' || !!getSelectedRole();
+  };
+
+  const clearStoredData = () => {
+    sessionStorage.removeItem('selectedRole');
+    sessionStorage.removeItem('googleLoginAttempt');
+    sessionStorage.removeItem('pendingGoogleSignUp');
+    localStorage.removeItem('selectedRole');
+    document.cookie = 'selectedRole=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  };
+
   const handleCallback = async () => {
     try {
       const storedRole = getSelectedRole();
+      const fromLoginPage = isLoginAttempt();
+      const fromSignupPage = isSignupAttempt();
       
+      console.log('AuthCallback:', { storedRole, fromLoginPage, fromSignupPage });
+
       const { data: { session: existingSession }, error: sessionError } = await supabase.auth.getSession();
       
       if (existingSession?.user) {
@@ -38,7 +58,7 @@ const AuthCallback = () => {
             role: storedRole
           };
         }
-        await processUser(existingSession);
+        await processUser(existingSession, fromLoginPage, fromSignupPage);
         return;
       }
 
@@ -81,7 +101,7 @@ const AuthCallback = () => {
         
         try {
           const session = await authStatePromise;
-          await processUser(session);
+          await processUser(session, fromLoginPage, fromSignupPage);
         } catch (timeoutError) {
           const { data: { session: retrySession } } = await supabase.auth.getSession();
           
@@ -93,7 +113,7 @@ const AuthCallback = () => {
                 role: currentStoredRole
               };
             }
-            await processUser(retrySession);
+            await processUser(retrySession, fromLoginPage, fromSignupPage);
           } else {
             throw timeoutError;
           }
@@ -101,7 +121,7 @@ const AuthCallback = () => {
         return;
       }
       
-      throw new Error('No authentication data found. Please try signing up again.');
+      throw new Error('No authentication data found. Please try again.');
 
     } catch (error) {
       console.error('Auth callback error:', error);
@@ -110,7 +130,7 @@ const AuthCallback = () => {
     }
   };
 
-  const processUser = async (session) => {
+  const processUser = async (session, fromLoginPage, fromSignupPage) => {
     try {
       const user = session.user;
       const storedRole = getSelectedRole();
@@ -127,26 +147,36 @@ const AuthCallback = () => {
       const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
       const phone = user.user_metadata?.phone || user.phone || '';
 
-      setMessage('Creating your account...');
+      setMessage('Checking your account...');
 
+      // Check if user already exists in profiles
       const { data: existingProfile, error: profileCheckError } = await supabase
         .from('profiles')
         .select('id, role')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (existingProfile) {
-        sessionStorage.removeItem('selectedRole');
-        localStorage.removeItem('selectedRole');
-        sessionStorage.removeItem('pendingGoogleSignUp');
-        document.cookie = 'selectedRole=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      // Check if user is an admin
+      const { data: adminData } = await supabase
+        .from('admin_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      // =============================================
+      // EXISTING USER - Profile or Admin found
+      // =============================================
+      if (existingProfile || adminData) {
+        console.log('✅ Existing user found');
+        clearStoredData();
         
-        const finalRole = existingProfile.role;
+        const finalRole = existingProfile?.role || 'admin';
         setStatus('success');
-        setMessage(`Welcome back! Redirecting to your ${finalRole} dashboard...`);
+        setMessage(`Welcome back! Redirecting to your dashboard...`);
         
+        // Route based on role
         const routes = {
-          admin: '/admindashboard',
+          admin: '/admin',
           teacher: '/teacherdashboard',
           student: '/studentdashboard',
           parent: '/parentdashboard'
@@ -158,58 +188,104 @@ const AuthCallback = () => {
         return;
       }
 
-      await supabase.auth.updateUser({
-        data: {
-          full_name: fullName,
-          role: role,
-          phone: phone,
-          avatar_url: avatarUrl
-        }
-      });
+      // =============================================
+      // NEW USER - No profile or admin account found
+      // =============================================
+      console.log('❌ No existing account found');
 
-      const profileData = {
-        id: user.id,
-        email: email,
-        full_name: fullName,
-        phone: phone,
-        role: role,
-        avatar_url: avatarUrl,
-        auth_provider: 'google',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'id' });
-
-      if (profileError) {
-        throw new Error('Failed to save profile: ' + profileError.message);
+      // If this came from LOGIN page - REJECT and redirect to signup
+      if (fromLoginPage && !fromSignupPage) {
+        console.log('Came from login page - rejecting new user');
+        await supabase.auth.signOut();
+        clearStoredData();
+        
+        setStatus('error');
+        setMessage('No account found with this Google account. Please sign up first.');
+        
+        setTimeout(() => {
+          navigate('/signup', { 
+            replace: true,
+            state: { 
+              message: 'No account found. Please create an account first.',
+              email: user.email 
+            } 
+          });
+        }, 2500);
+        return;
       }
 
-      sessionStorage.removeItem('selectedRole');
-      localStorage.removeItem('selectedRole');
-      sessionStorage.removeItem('pendingGoogleSignUp');
-      document.cookie = 'selectedRole=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      // =============================================
+      // SIGNUP FLOW - Create new account
+      // =============================================
+      if (fromSignupPage) {
+        console.log('✅ Signup flow - creating account with role:', role);
+        
+        setMessage('Creating your account...');
 
-      setStatus('success');
-      setMessage(`Account created successfully! Redirecting to your ${role} dashboard...`);
+        await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+            role: role,
+            phone: phone,
+            avatar_url: avatarUrl
+          }
+        });
 
-      const routes = {
-        admin: '/admindashboard',
-        teacher: '/teacherdashboard',
-        student: '/studentdashboard',
-        parent: '/parentdashboard'
-      };
+        const profileData = {
+          id: user.id,
+          email: email,
+          full_name: fullName,
+          phone: phone,
+          role: role,
+          avatar_url: avatarUrl,
+          auth_provider: 'google',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert(profileData, { onConflict: 'id' });
+
+        if (profileError) {
+          throw new Error('Failed to save profile: ' + profileError.message);
+        }
+
+        clearStoredData();
+
+        setStatus('success');
+        setMessage(`Account created successfully! Redirecting to your ${role} dashboard...`);
+
+        const routes = {
+          teacher: '/teacherdashboard',
+          student: '/studentdashboard',
+          parent: '/parentdashboard'
+        };
+
+        setTimeout(() => {
+          navigate(routes[role] || '/studentdashboard', { replace: true });
+        }, 2000);
+        return;
+      }
+
+      // =============================================
+      // UNKNOWN SOURCE - No clear signup or login flag
+      // =============================================
+      console.log('⚠️ Unknown source - rejecting');
+      await supabase.auth.signOut();
+      clearStoredData();
+      
+      setStatus('error');
+      setMessage('Unable to verify account source. Please sign up or log in again.');
+      
       setTimeout(() => {
-        navigate(routes[role] || '/studentdashboard', { replace: true });
-      }, 2000);
+        navigate('/signup', { replace: true });
+      }, 2500);
 
     } catch (error) {
       console.error('Error processing user:', error);
       setStatus('error');
-      setMessage('Failed to create account: ' + error.message);
+      setMessage('Failed to process account: ' + error.message);
     }
   };
 
@@ -219,7 +295,6 @@ const AuthCallback = () => {
       <div className="auth-callback-orb auth-callback-orb-2"></div>
       
       <div className="auth-callback-card">
-        {/* Decorative sparkles */}
         <div className="auth-callback-sparkle auth-callback-sparkle-1"></div>
         <div className="auth-callback-sparkle auth-callback-sparkle-2"></div>
         <div className="auth-callback-sparkle auth-callback-sparkle-3"></div>
@@ -275,7 +350,7 @@ const AuthCallback = () => {
               <span className="auth-callback-status-dot error"></span>
               Error
             </div>
-            <h2 className="auth-callback-heading error">Error</h2>
+            <h2 className="auth-callback-heading error">Account Not Found</h2>
             <p className="auth-callback-message error">{message}</p>
             <button
               onClick={() => {
@@ -286,7 +361,7 @@ const AuthCallback = () => {
               }}
               className="auth-callback-button"
             >
-              Back to Sign Up
+              Go to Sign Up
             </button>
           </>
         )}
