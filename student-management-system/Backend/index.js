@@ -80,6 +80,27 @@ const upload = multer({
   }
 });
 
+// Configure multer for materials file uploads
+const materialsUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'image/jpeg', 'image/png', 'image/gif',
+      'video/mp4', 'application/zip', 'application/epub+zip'
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'), false);
+    }
+  }
+});
+
 // ==================== AUTH MIDDLEWARE ====================
 const extractSupabaseUser = async (req, res, next) => {
   try {
@@ -143,18 +164,15 @@ const formatDate = (dateString) => {
   
   console.log(`📅 Formatting date: "${dateString}"`);
   
-  // If it's already in YYYY-MM-DD format
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (dateRegex.test(dateString)) {
     const [year, month, day] = dateString.split('-');
-    // Validate the date is reasonable (after year 1900)
     if (parseInt(year) > 1900) {
       console.log(`📅 Date valid: ${dateString}`);
       return dateString;
     }
   }
   
-  // Try parsing as a Date object
   const date = new Date(dateString);
   if (!isNaN(date.getTime()) && date.getFullYear() > 1900) {
     const formatted = date.toISOString().split('T')[0];
@@ -165,6 +183,198 @@ const formatDate = (dateString) => {
   console.log(`⚠️ Invalid date: "${dateString}"`);
   return null;
 };
+
+// ==================== MATERIALS ROUTES ====================
+
+// GET teacher's subjects
+app.get('/api/teachers/subjects', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('subjects, role')
+      .eq('id', req.user.id)
+      .single();
+    
+    if (!profile || profile.role !== 'teacher') {
+      return res.status(403).json({ message: 'Teacher only' });
+    }
+    
+    res.json({ success: true, data: profile.subjects || [] });
+  } catch (error) {
+    console.error('Error fetching teacher subjects:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST upload material
+app.post('/api/materials/upload', materialsUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role, full_name, email, subjects')
+      .eq('id', req.user.id)
+      .single();
+    
+    if (!profile || profile.role !== 'teacher') {
+      return res.status(403).json({ message: 'Teacher only' });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    
+    const { title, description, subject, materialType } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+    
+    let finalSubject = subject || (profile.subjects?.[0]) || 'General';
+    
+    const timestamp = Date.now();
+    const sanitizedFileName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uniqueFileName = `${req.user.id}/${timestamp}_${sanitizedFileName}`;
+    
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('materials')
+      .upload(uniqueFileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        cacheControl: '3600',
+        upsert: false
+      });
+    
+    if (uploadError) {
+      console.error('Storage error:', uploadError);
+      return res.status(500).json({ message: 'Storage upload failed' });
+    }
+    
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('materials')
+      .getPublicUrl(uniqueFileName);
+    
+    const { data: material, error: dbError } = await supabaseAdmin
+      .from('materials')
+      .insert({
+        title,
+        description: description || '',
+        uploaded_by: req.user.id,
+        teacher_name: profile.full_name || profile.email || 'Unknown',
+        subject: finalSubject,
+        material_type: materialType || 'notes',
+        file_type: req.file.mimetype,
+        file_name: req.file.originalname,
+        file_url: publicUrl,
+        file_size: `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`,
+        file_path: uniqueFileName,
+        download_count: 0,
+        is_active: true
+      })
+      .select()
+      .single();
+    
+    if (dbError) {
+      console.error('Database error:', dbError);
+      return res.status(500).json({ message: 'Database save failed' });
+    }
+    
+    console.log('✅ Material uploaded successfully');
+    res.status(201).json({ success: true, data: material });
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET teacher materials
+app.get('/api/materials/teacher', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.id)
+      .single();
+    
+    if (!profile || profile.role !== 'teacher') {
+      return res.status(403).json({ message: 'Teacher only' });
+    }
+    
+    const { data: materials, error } = await supabaseAdmin
+      .from('materials')
+      .select('*')
+      .eq('uploaded_by', req.user.id)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data: materials || [] });
+  } catch (error) {
+    console.error('Error fetching materials:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE material
+app.delete('/api/materials/:id', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
+    
+    const { data: material } = await supabaseAdmin
+      .from('materials')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    
+    if (!material) return res.status(404).json({ message: 'Not found' });
+    if (material.uploaded_by !== req.user.id) return res.status(403).json({ message: 'Not authorized' });
+    
+    await supabaseAdmin.storage.from('materials').remove([material.file_path]);
+    await supabaseAdmin.from('materials').delete().eq('id', req.params.id);
+    
+    res.json({ success: true, message: 'Deleted' });
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DOWNLOAD material
+app.get('/api/materials/:id/download', async (req, res) => {
+  try {
+    const { data: material } = await supabaseAdmin
+      .from('materials')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    
+    if (!material) return res.status(404).json({ message: 'Not found' });
+    
+    await supabaseAdmin
+      .from('materials')
+      .update({ download_count: (material.download_count || 0) + 1 })
+      .eq('id', material.id);
+    
+    const { data, error } = await supabaseAdmin.storage
+      .from('materials')
+      .download(material.file_path);
+    
+    if (error) return res.status(500).json({ message: 'Download failed' });
+    
+    const buffer = Buffer.from(await data.arrayBuffer());
+    res.setHeader('Content-Type', material.file_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${material.file_name}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Download error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // ==================== ROLE-BASED REGISTRATION ENDPOINTS ====================
 
@@ -191,7 +401,6 @@ app.post('/api/register/:role', async (req, res) => {
     const userId = req.user.id;
     const userData = req.body;
 
-    // Basic validation
     if (!userData.full_name || !userData.email) {
       return res.status(400).json({
         success: false,
@@ -201,7 +410,6 @@ app.post('/api/register/:role', async (req, res) => {
 
     console.log(`📝 Registering ${role}:`, userData);
 
-    // Map role to table name
     const tableMap = {
       student: 'students',
       teacher: 'teachers',
@@ -211,7 +419,6 @@ app.post('/api/register/:role', async (req, res) => {
 
     const tableName = tableMap[role];
 
-    // Check if user already exists in this table
     const { data: existingUser } = await supabaseAdmin
       .from(tableName)
       .select('id')
@@ -225,7 +432,6 @@ app.post('/api/register/:role', async (req, res) => {
       });
     }
 
-    // Prepare role-specific data
     const roleData = {
       id: userId,
       email: userData.email,
@@ -237,7 +443,6 @@ app.post('/api/register/:role', async (req, res) => {
       updated_by: userId
     };
 
-    // Add role-specific fields
     if (role === 'student') {
       roleData.student_number = userData.student_number || `STU${Date.now().toString().slice(-6)}`;
       roleData.grade_level = userData.grade_level || 'Grade 11';
@@ -255,7 +460,6 @@ app.post('/api/register/:role', async (req, res) => {
       roleData.department = userData.department || 'General';
     }
 
-    // Insert into role-specific table
     const { data: insertedData, error: insertError } = await supabaseAdmin
       .from(tableName)
       .insert([roleData])
@@ -267,7 +471,6 @@ app.post('/api/register/:role', async (req, res) => {
       throw insertError;
     }
 
-    // Also update the profiles table
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -671,7 +874,6 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
 
     console.log(`✅ Successfully registered student: ${full_name}`);
 
-    // Handle payment proof if uploaded
     let paymentProofUrl = null;
     if (req.file) {
       console.log('📸 Uploading payment proof...');
@@ -697,9 +899,7 @@ app.post('/api/complete-registration', upload.single('paymentProof'), async (req
       }
     }
 
-    // Save payment information
     if (payment_method) {
-      // Calculate total amount based on subjects (Maloti)
       const subjectPrices = {
         math_core: 180,
         math_extended: 180,
@@ -1329,6 +1529,12 @@ app.listen(PORT, () => {
    POST /api/auth/login                 - User login
    POST /api/auth/logout                - User logout
    GET  /api/auth/profile               - Get user profile
+   
+   GET  /api/teachers/subjects          - Get teacher's subjects
+   POST /api/materials/upload           - Upload learning material
+   GET  /api/materials/teacher          - Get teacher's materials
+   DELETE /api/materials/:id            - Delete material
+   GET  /api/materials/:id/download     - Download material
    
    GET  /api/health                     - Health check
    GET  /api/test                       - Test Supabase
