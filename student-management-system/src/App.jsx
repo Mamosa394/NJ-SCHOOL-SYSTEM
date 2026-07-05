@@ -20,6 +20,7 @@ import StudentDashboard from "./pages/students/StudentDashboard";
 import StudentRegistration from './components/TestSignUP';
 import SelectRole from './components/SelectRole';
 import MultiStageRegistration from './components/MultiStageRegistration';
+import AdminActivation from './components/AdminActivation';
 import AdminVerification from './admin_only/AdminVerification';
 import AuthCallback from './components/AuthCallback';
 import './App.css';
@@ -116,6 +117,7 @@ function App() {
         <Route path="/registration" element={<MultiStageRegistration />} />
         <Route path="/authcallback" element={<AuthCallback />} />
         <Route path="/test-signup" element={<StudentRegistration />} />
+        <Route path="/admin/activate" element={<AdminActivation />} />
 
         {/* ============================================ */}
         {/* ADMIN ROUTES (Protected Layout Nested) */}
