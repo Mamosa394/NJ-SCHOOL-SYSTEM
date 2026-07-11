@@ -1,37 +1,40 @@
 import express from 'express';
 import multer from 'multer';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const router = express.Router();
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-// Configure multer for file uploads
+let supabase;
+const getSupabase = async () => {
+  if (!supabase) {
+    const { createClient } = await import('@supabase/supabase-js');
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
-      'application/pdf',
-      'application/msword',
+      'application/pdf', 'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.ms-powerpoint',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'video/mp4',
-      'application/zip',
-      'application/epub+zip'
+      'image/jpeg', 'image/png', 'image/gif',
+      'video/mp4', 'application/zip', 'application/epub+zip'
     ];
-    
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -40,127 +43,187 @@ const upload = multer({
   }
 });
 
-// Middleware
+// =============================================
+// AUTH MIDDLEWARE
+// =============================================
 const authenticateUser = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
+    const client = await getSupabase();
     
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await client.auth.getUser(token);
     
     if (error || !user) {
-      return res.status(401).json({ message: 'Invalid token' });
+      console.error('Auth error:', error?.message);
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
-    
+
     req.user = user;
+    req.supabase = client;
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Authentication failed' });
+    return res.status(401).json({ success: false, message: 'Authentication failed' });
   }
 };
 
+// =============================================
+// TEACHER ONLY - CHECK approved_teachers TABLE
+// =============================================
 const teacherOnly = async (req, res, next) => {
   try {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', req.user.id)
+    const client = req.supabase || await getSupabase();
+    
+    console.log('🔍 Checking approved_teachers for:', req.user.email);
+    
+    // ONLY query approved_teachers - NEVER profiles
+    const { data: teacher, error } = await client
+      .from('approved_teachers')
+      .select('*')
+      .eq('email', req.user.email)
+      .eq('approval_status', 'approved')
       .single();
-    
-    if (error || !profile || profile.role !== 'teacher') {
-      return res.status(403).json({ message: 'Teacher access required' });
+
+    if (error || !teacher) {
+      console.error('❌ Teacher not found in approved_teachers:', req.user.email);
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Your email is not in the approved teachers list or not yet approved.'
+      });
     }
+
+    console.log('✅ Approved teacher found:', teacher.full_name);
+    console.log('   Subjects:', teacher.subjects);
     
+    req.teacher = teacher;
     next();
   } catch (error) {
-    res.status(403).json({ message: 'Access denied' });
+    console.error('Teacher check error:', error);
+    return res.status(403).json({ success: false, message: 'Access denied' });
   }
 };
 
-// ===== TEACHER SUBJECTS =====
+// =============================================
+// GET TEACHER SUBJECTS (from approved_teachers)
+// =============================================
 router.get('/teachers/subjects', authenticateUser, teacherOnly, async (req, res) => {
   try {
-    const { data: teacherProfile, error } = await supabase
-      .from('profiles')
-      .select('subjects')
-      .eq('id', req.user.id)
-      .single();
+    console.log('📚 MATERIALS: Fetching subjects from approved_teachers');
+    
+    let subjects = req.teacher.subjects || [];
 
-    if (error) {
-      return res.status(500).json({ message: 'Failed to fetch teacher subjects' });
+    // Parse subjects if string
+    if (typeof subjects === 'string') {
+      try {
+        subjects = JSON.parse(subjects);
+      } catch {
+        subjects = subjects.split(',').map(s => s.trim()).filter(s => s);
+      }
     }
 
-    res.json({
-      success: true,
-      data: teacherProfile?.subjects || []
+    if (!Array.isArray(subjects)) {
+      subjects = [];
+    }
+
+    console.log('📋 Subjects found:', subjects);
+
+    res.json({ 
+      success: true, 
+      data: subjects,
+      teacher_name: req.teacher.full_name,
+      teacher_id: req.teacher.teacher_id
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch teacher subjects' });
+    console.error('Subjects error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// ===== UPLOAD MATERIAL =====
+// =============================================
+// UPLOAD MATERIAL
+// =============================================
 router.post('/materials/upload', authenticateUser, teacherOnly, upload.single('file'), async (req, res) => {
   try {
+    const client = req.supabase || await getSupabase();
+    
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
     const { title, description, subject, materialType } = req.body;
 
-    if (!title) {
-      return res.status(400).json({ message: 'Title is required' });
+    if (!title?.trim()) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
     }
 
-    const { data: teacherProfile } = await supabase
-      .from('profiles')
-      .select('full_name, email, subjects')
-      .eq('id', req.user.id)
-      .single();
+    // Get teacher info from approved_teachers (already in req.teacher)
+    const teacherName = req.teacher.full_name;
+    const teacherId = req.teacher.teacher_id;
 
-    let finalSubject = subject;
-    if (!finalSubject && teacherProfile?.subjects?.length > 0) {
-      finalSubject = teacherProfile.subjects[0];
+    // Get subjects from approved_teachers
+    let teacherSubjects = req.teacher.subjects || [];
+    if (typeof teacherSubjects === 'string') {
+      try {
+        teacherSubjects = JSON.parse(teacherSubjects);
+      } catch {
+        teacherSubjects = teacherSubjects.split(',').map(s => s.trim()).filter(s => s);
+      }
     }
-    if (!finalSubject) finalSubject = 'General';
 
+    const finalSubject = subject?.trim() || (Array.isArray(teacherSubjects) ? teacherSubjects[0] : 'General');
+
+    console.log('📤 Uploading material:');
+    console.log('   Title:', title.trim());
+    console.log('   Subject:', finalSubject);
+    console.log('   Teacher:', teacherName, `(${teacherId})`);
+    console.log('   File:', req.file.originalname);
+
+    // Upload file to storage
     const timestamp = Date.now();
-    const sanitizedFileName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const uniqueFileName = `${req.user.id}/${timestamp}_${sanitizedFileName}`;
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = `${req.user.id}/${timestamp}_${safeName}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await client.storage
       .from('materials')
-      .upload(uniqueFileName, req.file.buffer, {
+      .upload(filePath, req.file.buffer, {
         contentType: req.file.mimetype,
-        cacheControl: '3600',
         upsert: false
       });
 
     if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      return res.status(500).json({ message: 'Failed to upload file to storage' });
+      console.error('Storage error:', uploadError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Upload failed: ' + uploadError.message 
+      });
     }
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = client.storage
       .from('materials')
-      .getPublicUrl(uniqueFileName);
+      .getPublicUrl(filePath);
 
-    const { data: material, error: dbError } = await supabase
+    const fileSizeMB = (req.file.size / (1024 * 1024)).toFixed(2);
+
+    // Save to materials table
+    const { data: material, error: dbError } = await client
       .from('materials')
       .insert({
-        title,
+        title: title.trim(),
         description: description || '',
         uploaded_by: req.user.id,
-        teacher_name: teacherProfile?.full_name || teacherProfile?.email || 'Unknown',
+        teacher_name: teacherName,
+        teacher_id: teacherId,
         subject: finalSubject,
         material_type: materialType || 'notes',
         file_type: req.file.mimetype,
         file_name: req.file.originalname,
         file_url: publicUrl,
-        file_size: `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`,
-        file_path: uniqueFileName,
+        file_size: `${fileSizeMB} MB`,
+        file_path: filePath,
         download_count: 0,
         is_active: true
       })
@@ -168,9 +231,16 @@ router.post('/materials/upload', authenticateUser, teacherOnly, upload.single('f
       .single();
 
     if (dbError) {
-      console.error('Database insert error:', dbError);
-      return res.status(500).json({ message: 'Failed to save material record' });
+      // Clean up uploaded file
+      await client.storage.from('materials').remove([filePath]);
+      console.error('Database error:', dbError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Database error: ' + dbError.message 
+      });
     }
+
+    console.log('✅ Material uploaded successfully:', material.id);
 
     res.status(201).json({
       success: true,
@@ -180,107 +250,113 @@ router.post('/materials/upload', authenticateUser, teacherOnly, upload.single('f
 
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ message: 'Server error during upload' });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
-// ===== GET TEACHER'S MATERIALS =====
+// =============================================
+// GET TEACHER'S MATERIALS
+// =============================================
 router.get('/materials/teacher', authenticateUser, teacherOnly, async (req, res) => {
   try {
-    const { data: materials, error } = await supabase
+    const client = req.supabase || await getSupabase();
+    
+    console.log('📁 Fetching materials for:', req.user.email);
+    
+    const { data: materials, error } = await client
       .from('materials')
       .select('*')
       .eq('uploaded_by', req.user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
-      return res.status(500).json({ message: 'Failed to fetch materials' });
+      console.error('Fetch error:', error);
+      return res.status(500).json({ success: false, message: error.message });
     }
+
+    console.log(`✅ Found ${materials?.length || 0} materials`);
 
     res.json({ success: true, data: materials || [] });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch materials' });
+    console.error('Materials fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching materials' });
   }
 });
 
-// ===== GET STUDENT MATERIALS =====
-router.get('/materials/student', authenticateUser, async (req, res) => {
-  try {
-    const { data: materials, error } = await supabase
-      .from('materials')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return res.status(500).json({ message: 'Failed to fetch materials' });
-    }
-
-    res.json({ success: true, data: materials || [] });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch materials' });
-  }
-});
-
-// ===== DOWNLOAD MATERIAL =====
+// =============================================
+// DOWNLOAD MATERIAL
+// =============================================
 router.get('/materials/:id/download', authenticateUser, async (req, res) => {
   try {
-    const { data: material, error: fetchError } = await supabase
+    const client = req.supabase || await getSupabase();
+    
+    const { data: material, error } = await client
       .from('materials')
       .select('*')
       .eq('id', req.params.id)
       .single();
 
-    if (fetchError || !material) {
-      return res.status(404).json({ message: 'Material not found' });
+    if (error || !material) {
+      return res.status(404).json({ success: false, message: 'Not found' });
     }
 
-    await supabase
+    // Increment download count
+    await client
       .from('materials')
       .update({ download_count: (material.download_count || 0) + 1 })
       .eq('id', material.id);
 
-    const { data, error: downloadError } = await supabase.storage
+    const { data, error: dlError } = await client.storage
       .from('materials')
       .download(material.file_path);
 
-    if (downloadError) {
-      return res.status(500).json({ message: 'Failed to download file' });
+    if (dlError) {
+      return res.status(500).json({ success: false, message: 'Download failed' });
     }
 
     const buffer = Buffer.from(await data.arrayBuffer());
     res.setHeader('Content-Type', material.file_type);
     res.setHeader('Content-Disposition', `attachment; filename="${material.file_name}"`);
-    res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to download file' });
+    console.error('Download error:', error);
+    res.status(500).json({ success: false, message: 'Error' });
   }
 });
 
-// ===== DELETE MATERIAL =====
+// =============================================
+// DELETE MATERIAL
+// =============================================
 router.delete('/materials/:id', authenticateUser, teacherOnly, async (req, res) => {
   try {
-    const { data: material, error: fetchError } = await supabase
+    const client = req.supabase || await getSupabase();
+    
+    const { data: material, error } = await client
       .from('materials')
       .select('*')
       .eq('id', req.params.id)
       .single();
 
-    if (fetchError || !material) {
-      return res.status(404).json({ message: 'Material not found' });
+    if (error || !material) {
+      return res.status(404).json({ success: false, message: 'Not found' });
     }
 
     if (material.uploaded_by !== req.user.id) {
-      return res.status(403).json({ message: 'Not authorized' });
+      return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    await supabase.storage.from('materials').remove([material.file_path]);
-    await supabase.from('materials').delete().eq('id', req.params.id);
+    // Delete from storage
+    await client.storage.from('materials').remove([material.file_path]);
+    
+    // Delete from database
+    await client.from('materials').delete().eq('id', req.params.id);
 
-    res.json({ success: true, message: 'Material deleted' });
+    console.log('✅ Material deleted:', req.params.id);
+
+    res.json({ success: true, message: 'Deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to delete material' });
+    console.error('Delete error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting material' });
   }
 });
 

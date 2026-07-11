@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
+// Add this line with your other imports
+import attendanceRoutes from '../Backend/routes/TeacherRoutes/TAttendanceRoutes.js';
+import materialsRoutes from '../Backend/routes/TeacherRoutes/TMaterialsRoutes.js';
 
 // ES Modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -184,197 +187,14 @@ const formatDate = (dateString) => {
   return null;
 };
 
-// ==================== MATERIALS ROUTES ====================
 
-// GET teacher's subjects
-app.get('/api/teachers/subjects', async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('subjects, role')
-      .eq('id', req.user.id)
-      .single();
-    
-    if (!profile || profile.role !== 'teacher') {
-      return res.status(403).json({ message: 'Teacher only' });
-    }
-    
-    res.json({ success: true, data: profile.subjects || [] });
-  } catch (error) {
-    console.error('Error fetching teacher subjects:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+// ==================== ATTENDANCE ROUTES ====================
+app.use('/api', attendanceRoutes);
 
-// POST upload material
-app.post('/api/materials/upload', materialsUpload.single('file'), async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('role, full_name, email, subjects')
-      .eq('id', req.user.id)
-      .single();
-    
-    if (!profile || profile.role !== 'teacher') {
-      return res.status(403).json({ message: 'Teacher only' });
-    }
-    
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-    
-    const { title, description, subject, materialType } = req.body;
-    
-    if (!title) {
-      return res.status(400).json({ message: 'Title is required' });
-    }
-    
-    let finalSubject = subject || (profile.subjects?.[0]) || 'General';
-    
-    const timestamp = Date.now();
-    const sanitizedFileName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const uniqueFileName = `${req.user.id}/${timestamp}_${sanitizedFileName}`;
-    
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('materials')
-      .upload(uniqueFileName, req.file.buffer, {
-        contentType: req.file.mimetype,
-        cacheControl: '3600',
-        upsert: false
-      });
-    
-    if (uploadError) {
-      console.error('Storage error:', uploadError);
-      return res.status(500).json({ message: 'Storage upload failed' });
-    }
-    
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('materials')
-      .getPublicUrl(uniqueFileName);
-    
-    const { data: material, error: dbError } = await supabaseAdmin
-      .from('materials')
-      .insert({
-        title,
-        description: description || '',
-        uploaded_by: req.user.id,
-        teacher_name: profile.full_name || profile.email || 'Unknown',
-        subject: finalSubject,
-        material_type: materialType || 'notes',
-        file_type: req.file.mimetype,
-        file_name: req.file.originalname,
-        file_url: publicUrl,
-        file_size: `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`,
-        file_path: uniqueFileName,
-        download_count: 0,
-        is_active: true
-      })
-      .select()
-      .single();
-    
-    if (dbError) {
-      console.error('Database error:', dbError);
-      return res.status(500).json({ message: 'Database save failed' });
-    }
-    
-    console.log('✅ Material uploaded successfully');
-    res.status(201).json({ success: true, data: material });
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
-// GET teacher materials
-app.get('/api/materials/teacher', async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', req.user.id)
-      .single();
-    
-    if (!profile || profile.role !== 'teacher') {
-      return res.status(403).json({ message: 'Teacher only' });
-    }
-    
-    const { data: materials, error } = await supabaseAdmin
-      .from('materials')
-      .select('*')
-      .eq('uploaded_by', req.user.id)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    
-    res.json({ success: true, data: materials || [] });
-  } catch (error) {
-    console.error('Error fetching materials:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+// ==================== MATERIALS ROUTES (from approved_teachers) ====================
+app.use('/api', materialsRoutes);
 
-// DELETE material
-app.delete('/api/materials/:id', async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    
-    const { data: material } = await supabaseAdmin
-      .from('materials')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
-    
-    if (!material) return res.status(404).json({ message: 'Not found' });
-    if (material.uploaded_by !== req.user.id) return res.status(403).json({ message: 'Not authorized' });
-    
-    await supabaseAdmin.storage.from('materials').remove([material.file_path]);
-    await supabaseAdmin.from('materials').delete().eq('id', req.params.id);
-    
-    res.json({ success: true, message: 'Deleted' });
-  } catch (error) {
-    console.error('Delete error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// DOWNLOAD material
-app.get('/api/materials/:id/download', async (req, res) => {
-  try {
-    const { data: material } = await supabaseAdmin
-      .from('materials')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
-    
-    if (!material) return res.status(404).json({ message: 'Not found' });
-    
-    await supabaseAdmin
-      .from('materials')
-      .update({ download_count: (material.download_count || 0) + 1 })
-      .eq('id', material.id);
-    
-    const { data, error } = await supabaseAdmin.storage
-      .from('materials')
-      .download(material.file_path);
-    
-    if (error) return res.status(500).json({ message: 'Download failed' });
-    
-    const buffer = Buffer.from(await data.arrayBuffer());
-    res.setHeader('Content-Type', material.file_type);
-    res.setHeader('Content-Disposition', `attachment; filename="${material.file_name}"`);
-    res.send(buffer);
-  } catch (error) {
-    console.error('Download error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 // ==================== ROLE-BASED REGISTRATION ENDPOINTS ====================
 
@@ -452,6 +272,7 @@ app.post('/api/register/:role', async (req, res) => {
       roleData.teacher_id = userData.teacher_id || `TCH${Date.now().toString().slice(-6)}`;
       roleData.specialization = userData.specialization || '';
       roleData.qualification = userData.qualification || '';
+      roleData.experience = userData.experience || '0-1';
     } else if (role === 'parent') {
       roleData.parent_id = userData.parent_id || `PRT${Date.now().toString().slice(-6)}`;
       roleData.children = userData.children || [];
@@ -1530,11 +1351,16 @@ app.listen(PORT, () => {
    POST /api/auth/logout                - User logout
    GET  /api/auth/profile               - Get user profile
    
-   GET  /api/teachers/subjects          - Get teacher's subjects
+   GET  /api/teachers/subjects          - Get teacher's subjects (from approved_teachers)
    POST /api/materials/upload           - Upload learning material
    GET  /api/materials/teacher          - Get teacher's materials
    DELETE /api/materials/:id            - Delete material
    GET  /api/materials/:id/download     - Download material
+   
+   GET  /api/teacher/attendance/subjects   - Get attendance subjects (from approved_teachers)
+   POST /api/teacher/attendance/submit     - Submit attendance
+   GET  /api/teacher/attendance/records    - Get attendance records
+   GET  /api/teacher/attendance/stats      - Get attendance stats
    
    GET  /api/health                     - Health check
    GET  /api/test                       - Test Supabase
